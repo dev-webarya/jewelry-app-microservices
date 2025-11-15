@@ -14,9 +14,10 @@ public interface UserMapper {
 
     @Mapping(target = "email", source = "email")
     @Mapping(target = "roles", ignore = true) // Roles are handled by service
-    @Mapping(target = "password", ignore = true)
-    @Mapping(target = "phoneNumber", ignore = true)
-    @Mapping(target = "enabled", ignore = true)
+    @Mapping(target = "password", ignore = true) // Handled by service
+    @Mapping(target = "phoneNumber", ignore = true) // Handled by service
+    // FIX: The Builder method is 'isEnabled()', so the target must be 'isEnabled'
+    @Mapping(target = "isEnabled", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
@@ -34,7 +35,8 @@ public interface UserMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "email", source = "email") // Renamed from username
     @Mapping(target = "password", ignore = true) // Never map password during a direct update
-    @Mapping(target = "enabled", ignore = true) // Don't update enabled status from this DTO
+    // FIX: The setter method is 'setEnabled()', so the target must be 'enabled'
+    @Mapping(target = "enabled", ignore = true)
     @Mapping(target = "roles", ignore = true) // Role update should be a separate process
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)

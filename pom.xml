@@ -18,6 +18,12 @@
 		<java.version>17</java.version>
 		<org.mapstruct.version>1.5.5.Final</org.mapstruct.version>
 		<springdoc.version>2.5.0</springdoc.version>
+		<!--
+          FIX: Added the missing lombok.version property.
+          Your maven-compiler-plugin refers to ${lombok.version}, but it was not defined.
+          Version 1.18.30 is the version managed by Spring Boot 3.2.0.
+        -->
+		<lombok.version>1.18.30</lombok.version>
 	</properties>
 
 	<dependencies>
