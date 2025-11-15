@@ -1,21 +1,69 @@
 {
   "info": {
-    "_postman_id": "jewelry-bulk-test-v1",
-    "name": "Jewelry Store - Complete Bulk Testing",
-    "description": "Comprehensive sequential testing with bulk data for jewelry store API including stores, products (rings, necklaces, bangles), filtering, and pagination",
+    "_postman_id": "a1b2c3d4-4e6f-8d2a-1b3a5c2d7b9e",
+    "name": "Jewellery App - Full Sequential & Bulk Test",
+    "description": "A sequential, role-based test collection that builds the entire store infrastructure and then runs bulk product creation and filtering tests.\n\n**Test Flow:**\n1.  **Admin:** Registers and gets a token.\n2.  **Admin:** Creates all core data (Stores, Categories, Attributes, Collections).\n3.  **Admin:** Creates a Store Manager user.\n4.  **Admin:** Bulk-creates all Products (Rings, Necklaces, Bangles).\n5.  **Admin:** Bulk-adds Product Images and Central Stock.\n6.  **Store Manager:** Logs in, fails to create a product, succeeds at adding local stock.\n7.  **Customer (Anonymous):** Runs all advanced filtering, sorting, and pagination queries.\n8.  **Admin:** Logs out.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:8080/api/v1",
-      "type": "string"
-    }
-  ],
   "item": [
     {
-      "name": "1. Store Setup",
-      "description": "Create stores first - jewelry items will be added to these stores",
+      "name": "1. ADMIN: Setup & Authentication",
+      "description": "First, the primary Admin user must be created. We use the 'dev-register' endpoint for a quick setup.",
+      "item": [
+        {
+          "name": "DEV Register & Login ADMIN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Access token and Refresh token exist\", function () {",
+                  "    pm.expect(jsonData.accessToken).to.exist;",
+                  "    pm.expect(jsonData.refreshToken).to.exist;",
+                  "});",
+                  "// Save variables for all other requests",
+                  "pm.collectionVariables.set(\"adminAccessToken\", jsonData.accessToken);",
+                  "pm.collectionVariables.set(\"adminUserId\", jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"firstName\": \"Admin\",\n    \"lastName\": \"User\",\n    \"email\": \"test-user+admin@app.com\",\n    \"phoneNumber\": \"9876543210\",\n    \"password\": \"Password@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/dev-register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "dev-register"
+              ]
+            },
+            "description": "Register the initial Admin user. \nWe use `+admin@` in the email because 'AuthenticationServiceImpl.java' has a check for this to assign the ADMIN_ROLE during dev registration."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. ADMIN: Core Infrastructure (Bulk)",
+      "description": "As the Admin, create all the base data needed to define products. (Stores, Categories, Attributes, Collections). All requests in this folder require Admin auth.",
       "item": [
         {
           "name": "Create Store - Main Showroom",
@@ -29,23 +77,34 @@
                   "pm.test('Store created successfully', function() {",
                   "    pm.response.to.have.status(201);",
                   "});"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Main Street Showroom\",\n    \"address\": \"123 Main Street, Downtown, New York, NY 10001\",\n    \"latitude\": 40.7128,\n    \"longitude\": -74.0060,\n    \"operatingHours\": \"Mon-Sat: 10AM-8PM, Sun: 11AM-6PM\",\n    \"contactPhone\": \"555-0101\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/stores",
-              "host": ["{{baseUrl}}"],
-              "path": ["stores"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stores"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Store - Mall Branch",
@@ -56,98 +115,35 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('mallStoreId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Grand Mall Branch\",\n    \"address\": \"456 Shopping Plaza, Level 2, Los Angeles, CA 90001\",\n    \"latitude\": 34.0522,\n    \"longitude\": -118.2437,\n    \"operatingHours\": \"Mon-Sun: 10AM-9PM\",\n    \"contactPhone\": \"555-0102\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/stores",
-              "host": ["{{baseUrl}}"],
-              "path": ["stores"]
-            }
-          }
-        },
-        {
-          "name": "Create Store - Downtown Boutique",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('downtownStoreId', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"name\": \"Downtown Boutique\",\n    \"address\": \"789 Fashion Avenue, Chicago, IL 60601\",\n    \"latitude\": 41.8781,\n    \"longitude\": -87.6298,\n    \"operatingHours\": \"Tue-Sat: 11AM-7PM, Sun-Mon: Closed\",\n    \"contactPhone\": \"555-0103\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/stores",
-              "host": ["{{baseUrl}}"],
-              "path": ["stores"]
-            }
-          }
-        },
-        {
-          "name": "Get All Stores",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/stores",
-              "host": ["{{baseUrl}}"],
-              "path": ["stores"]
-            }
-          }
-        },
-        {
-          "name": "Filter Stores by Name",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/stores?name=Mall",
-              "host": ["{{baseUrl}}"],
-              "path": ["stores"],
-              "query": [{"key": "name", "value": "Mall"}]
-            }
-          }
-        },
-        {
-          "name": "Get Stores with Pagination",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/stores?page=0&size=2",
-              "host": ["{{baseUrl}}"],
-              "path": ["stores"],
-              "query": [
-                {"key": "page", "value": "0"},
-                {"key": "size", "value": "2"}
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stores"
               ]
             }
-          }
-        }
-      ]
-    },
-    {
-      "name": "2. Attribute Types",
-      "description": "Create attribute types like Metal Type, Gemstone, etc.",
-      "item": [
+          },
+          "response": []
+        },
         {
           "name": "Create AttributeType - Metal Type",
           "event": [
@@ -157,23 +153,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('metalTypeId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Metal Type\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-types",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-types"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-types"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create AttributeType - Gemstone",
@@ -184,23 +191,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('gemstoneTypeId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Gemstone\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-types",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-types"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-types"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create AttributeType - Purity",
@@ -211,23 +229,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('purityTypeId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Purity\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-types",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-types"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-types"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create AttributeType - Size",
@@ -238,23 +267,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('sizeTypeId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Size\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-types",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-types"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-types"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create AttributeType - Style",
@@ -265,44 +305,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('styleTypeId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Style\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-types",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-types"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-types"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Get All AttributeTypes",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/attribute-types",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-types"]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "3. Attribute Values",
-      "description": "Create attribute values for each type (Gold, Silver, Diamond, etc.)",
-      "item": [
-        {
-          "name": "Metal - Gold",
+          "name": "Create AttributeValue - Gold",
           "event": [
             {
               "listen": "test",
@@ -310,26 +343,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('goldValueId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{metalTypeId}},\n    \"value\": \"Gold\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Metal - Silver",
+          "name": "Create AttributeValue - Silver",
           "event": [
             {
               "listen": "test",
@@ -337,26 +381,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('silverValueId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{metalTypeId}},\n    \"value\": \"Silver\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Metal - Platinum",
+          "name": "Create AttributeValue - Platinum",
           "event": [
             {
               "listen": "test",
@@ -364,26 +419,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('platinumValueId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{metalTypeId}},\n    \"value\": \"Platinum\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Metal - Rose Gold",
+          "name": "Create AttributeValue - Rose Gold",
           "event": [
             {
               "listen": "test",
@@ -391,26 +457,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('roseGoldValueId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{metalTypeId}},\n    \"value\": \"Rose Gold\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Gemstone - Diamond",
+          "name": "Create AttributeValue - Diamond",
           "event": [
             {
               "listen": "test",
@@ -418,26 +495,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('diamondValueId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{gemstoneTypeId}},\n    \"value\": \"Diamond\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Gemstone - Ruby",
+          "name": "Create AttributeValue - Ruby",
           "event": [
             {
               "listen": "test",
@@ -445,26 +533,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('rubyValueId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{gemstoneTypeId}},\n    \"value\": \"Ruby\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Gemstone - Emerald",
+          "name": "Create AttributeValue - Emerald",
           "event": [
             {
               "listen": "test",
@@ -472,26 +571,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('emeraldValueId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{gemstoneTypeId}},\n    \"value\": \"Emerald\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Purity - 14K",
+          "name": "Create AttributeValue - 14K",
           "event": [
             {
               "listen": "test",
@@ -499,26 +609,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('purity14KId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{purityTypeId}},\n    \"value\": \"14K\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Purity - 18K",
+          "name": "Create AttributeValue - 18K",
           "event": [
             {
               "listen": "test",
@@ -526,26 +647,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('purity18KId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{purityTypeId}},\n    \"value\": \"18K\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Purity - 22K",
+          "name": "Create AttributeValue - 22K",
           "event": [
             {
               "listen": "test",
@@ -553,26 +685,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('purity22KId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{purityTypeId}},\n    \"value\": \"22K\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Size - Small",
+          "name": "Create AttributeValue - Small",
           "event": [
             {
               "listen": "test",
@@ -580,26 +723,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('sizeSmallId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{sizeTypeId}},\n    \"value\": \"Small\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Size - Medium",
+          "name": "Create AttributeValue - Medium",
           "event": [
             {
               "listen": "test",
@@ -607,26 +761,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('sizeMediumId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{sizeTypeId}},\n    \"value\": \"Medium\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Size - Large",
+          "name": "Create AttributeValue - Large",
           "event": [
             {
               "listen": "test",
@@ -634,26 +799,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('sizeLargeId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{sizeTypeId}},\n    \"value\": \"Large\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Style - Traditional",
+          "name": "Create AttributeValue - Traditional",
           "event": [
             {
               "listen": "test",
@@ -661,26 +837,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('styleTraditionalId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{styleTypeId}},\n    \"value\": \"Traditional\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Style - Contemporary",
+          "name": "Create AttributeValue - Contemporary",
           "event": [
             {
               "listen": "test",
@@ -688,26 +875,37 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('styleContemporaryId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{styleTypeId}},\n    \"value\": \"Contemporary\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Style - Vintage",
+          "name": "Create AttributeValue - Vintage",
           "event": [
             {
               "listen": "test",
@@ -715,55 +913,35 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('styleVintageId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"attributeTypeId\": {{styleTypeId}},\n    \"value\": \"Vintage\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attribute-values"
+              ]
             }
-          }
+          },
+          "response": []
         },
-        {
-          "name": "Get All Attribute Values",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/attribute-values",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"]
-            }
-          }
-        },
-        {
-          "name": "Filter by Attribute Type",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/attribute-values?attributeTypeId={{metalTypeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["attribute-values"],
-              "query": [{"key": "attributeTypeId", "value": "{{metalTypeId}}"}]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "4. Categories",
-      "description": "Create hierarchical categories for rings, necklaces, bangles",
-      "item": [
         {
           "name": "Create Category - Rings (Root)",
           "event": [
@@ -773,23 +951,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('ringsCategoryId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Rings\",\n    \"parentId\": null\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Category - Engagement Rings",
@@ -800,23 +989,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('engagementRingsCategoryId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Engagement Rings\",\n    \"parentId\": {{ringsCategoryId}}\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Category - Wedding Bands",
@@ -827,23 +1027,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('weddingBandsCategoryId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Wedding Bands\",\n    \"parentId\": {{ringsCategoryId}}\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Category - Fashion Rings",
@@ -854,23 +1065,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('fashionRingsCategoryId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Fashion Rings\",\n    \"parentId\": {{ringsCategoryId}}\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Category - Necklaces (Root)",
@@ -881,23 +1103,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('necklacesCategoryId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Necklaces\",\n    \"parentId\": null\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Category - Pendants",
@@ -908,23 +1141,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('pendantsCategoryId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Pendants\",\n    \"parentId\": {{necklacesCategoryId}}\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Category - Chains",
@@ -935,23 +1179,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('chainsCategoryId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Chains\",\n    \"parentId\": {{necklacesCategoryId}}\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Category - Bangles (Root)",
@@ -962,23 +1217,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('banglesCategoryId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Bangles\",\n    \"parentId\": null\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Category - Traditional Bangles",
@@ -989,23 +1255,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('traditionalBanglesCategoryId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Traditional Bangles\",\n    \"parentId\": {{banglesCategoryId}}\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Category - Cuff Bangles",
@@ -1016,68 +1293,35 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('cuffBanglesCategoryId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Cuff Bangles\",\n    \"parentId\": {{banglesCategoryId}}\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
             }
-          }
+          },
+          "response": []
         },
-        {
-          "name": "Get All Categories",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"]
-            }
-          }
-        },
-        {
-          "name": "Get Root Categories Only",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/categories?isRoot=true",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"],
-              "query": [{"key": "isRoot", "value": "true"}]
-            }
-          }
-        },
-        {
-          "name": "Get Subcategories of Rings",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/categories?parentId={{ringsCategoryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories"],
-              "query": [{"key": "parentId", "value": "{{ringsCategoryId}}"}]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "5. Collections",
-      "description": "Create collections like Bridal, Summer, etc.",
-      "item": [
         {
           "name": "Create Collection - Bridal Collection",
           "event": [
@@ -1087,23 +1331,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('bridalCollectionId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Bridal Collection\",\n    \"description\": \"Exclusive designs for your special day\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/collections",
-              "host": ["{{baseUrl}}"],
-              "path": ["collections"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "collections"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Collection - Summer 2025",
@@ -1114,23 +1369,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('summerCollectionId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Summer 2025\",\n    \"description\": \"Bright and vibrant summer designs\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/collections",
-              "host": ["{{baseUrl}}"],
-              "path": ["collections"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "collections"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Collection - Festival Special",
@@ -1141,23 +1407,34 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('festivalCollectionId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Festival Special\",\n    \"description\": \"Traditional jewelry for festivals and celebrations\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/collections",
-              "host": ["{{baseUrl}}"],
-              "path": ["collections"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "collections"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Create Collection - Office Wear",
@@ -1168,728 +1445,1266 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "pm.collectionVariables.set('officeCollectionId', jsonData.id);"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"name\": \"Office Wear\",\n    \"description\": \"Subtle and elegant pieces for professional settings\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/collections",
-              "host": ["{{baseUrl}}"],
-              "path": ["collections"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "collections"
+              ]
             }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminAccessToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "id": "2d8f0f3a-7e3e-4b4a-a82f-2d6e0a8d7e0c",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript"
           }
         },
         {
-          "name": "Get All Collections",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/collections",
-              "host": ["{{baseUrl}}"],
-              "path": ["collections"]
-            }
+          "listen": "test",
+          "script": {
+            "id": "e4a2d7f8-4a4b-4b2a-a8f8-2c2e0a8d7e0c",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript"
           }
         }
       ]
     },
     {
-      "name": "6. Products - RINGS",
-      "description": "Create various ring products",
+      "name": "3. ADMIN: User & Product Setup",
+      "description": "Now that the infrastructure is ready, the Admin can create other users and the products themselves.",
       "item": [
         {
-          "name": "Create - Classic Gold Ring",
+          "name": "ADMIN Creates Store Manager User",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
                   "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('classicGoldRingId', jsonData.id);"
-                ]
+                  "pm.collectionVariables.set(\"storeManagerUserId\", jsonData.id);",
+                  ""
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"sku\": \"RING-G-001\",\n    \"name\": \"Classic Gold Ring\",\n    \"description\": \"Timeless 14K gold ring with elegant design\",\n    \"basePrice\": 499.99,\n    \"isActive\": true,\n    \"categoryId\": {{fashionRingsCategoryId}},\n    \"collectionIds\": [{{officeCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{purity14KId}}, {{sizeMediumId}}, {{styleTraditionalId}}]\n}"
+              "raw": "{\n    \"firstName\": \"Store\",\n    \"lastName\": \"Manager\",\n    \"email\": \"store-manager@app.com\",\n    \"phoneNumber\": \"1111111111\",\n    \"password\": \"Password@123\",\n    \"roles\": [\n        \"ROLE_STORE_MANAGER\"\n    ]\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": "Admin uses the /users endpoint to create a new user with the 'ROLE_STORE_MANAGER'. We save their ID."
+          },
+          "response": []
+        },
+        {
+          "name": "ADMIN Creates Product - RINGS",
+          "item": [
+            {
+              "name": "Create - Classic Gold Ring",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.collectionVariables.set('classicGoldRingId', jsonData.id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"RING-G-001\",\n    \"name\": \"Classic Gold Ring\",\n    \"description\": \"Timeless 14K gold ring with elegant design\",\n    \"basePrice\": 499.99,\n    \"isActive\": true,\n    \"categoryId\": {{fashionRingsCategoryId}},\n    \"collectionIds\": [{{officeCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{purity14KId}}, {{sizeMediumId}}, {{styleTraditionalId}}]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create - Platinum Engagement Ring",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.collectionVariables.set('platinumEngagementRingId', jsonData.id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"RING-P-ENG-001\",\n    \"name\": \"Platinum Diamond Engagement Ring\",\n    \"description\": \"Stunning platinum ring with 1 carat diamond\",\n    \"basePrice\": 2999.99,\n    \"isActive\": true,\n    \"categoryId\": {{engagementRingsCategoryId}},\n    \"collectionIds\": [{{bridalCollectionId}}],\n    \"attributeValueIds\": [{{platinumValueId}}, {{diamondValueId}}, {{sizeMediumId}}, {{styleContemporaryId}}]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create - Rose Gold Wedding Band",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.collectionVariables.set('roseGoldWeddingBandId', jsonData.id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"RING-RG-WED-001\",\n    \"name\": \"Rose Gold Wedding Band\",\n    \"description\": \"Beautiful 18K rose gold wedding band\",\n    \"basePrice\": 899.99,\n    \"isActive\": true,\n    \"categoryId\": {{weddingBandsCategoryId}},\n    \"collectionIds\": [{{bridalCollectionId}}],\n    \"attributeValueIds\": [{{roseGoldValueId}}, {{purity18KId}}, {{sizeLargeId}}, {{styleContemporaryId}}]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create - Silver Fashion Ring",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.collectionVariables.set('silverFashionRingId', jsonData.id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"RING-S-FASH-001\",\n    \"name\": \"Contemporary Silver Ring\",\n    \"description\": \"Modern silver ring with minimalist design\",\n    \"basePrice\": 199.99,\n    \"isActive\": true,\n    \"categoryId\": {{fashionRingsCategoryId}},\n    \"collectionIds\": [{{summerCollectionId}}, {{officeCollectionId}}],\n    \"attributeValueIds\": [{{silverValueId}}, {{sizeSmallId}}, {{styleContemporaryId}}]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create - Ruby Gold Ring",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.collectionVariables.set('rubyGoldRingId', jsonData.id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"RING-G-RUBY-001\",\n    \"name\": \"Gold Ring with Ruby\",\n    \"description\": \"Elegant 18K gold ring with ruby gemstone\",\n    \"basePrice\": 1599.99,\n    \"isActive\": true,\n    \"categoryId\": {{fashionRingsCategoryId}},\n    \"collectionIds\": [{{festivalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{rubyValueId}}, {{purity18KId}}, {{sizeMediumId}}, {{styleTraditionalId}}]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
             }
+          ],
+          "description": "Bulk create all Ring products."
+        },
+        {
+          "name": "ADMIN Creates Product - NECKLACES",
+          "item": [
+            {
+              "name": "Create - Diamond Pendant Necklace",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.collectionVariables.set('diamondPendantId', jsonData.id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"NECK-G-DIA-001\",\n    \"name\": \"Diamond Pendant Necklace\",\n    \"description\": \"Stunning 18K gold necklace with diamond pendant\",\n    \"basePrice\": 2499.99,\n    \"isActive\": true,\n    \"categoryId\": {{pendantsCategoryId}},\n    \"collectionIds\": [{{bridalCollectionId}}, {{festivalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{diamondValueId}}, {{purity18KId}}, {{styleTraditionalId}}]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create - Gold Chain Necklace",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.collectionVariables.set('goldChainId', jsonData.id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"NECK-G-CHAIN-001\",\n    \"name\": \"22K Gold Chain Necklace\",\n    \"description\": \"Traditional 22K gold chain, perfect for everyday wear\",\n    \"basePrice\": 3999.99,\n    \"isActive\": true,\n    \"categoryId\": {{chainsCategoryId}},\n    \"collectionIds\": [{{festivalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{purity22KId}}, {{styleTraditionalId}}]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create - Silver Pendant Necklace",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.collectionVariables.set('silverPendantId', jsonData.id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"NECK-S-PEND-001\",\n    \"name\": \"Contemporary Silver Pendant\",\n    \"description\": \"Modern silver pendant necklace with sleek design\",\n    \"basePrice\": 399.99,\n    \"isActive\": true,\n    \"categoryId\": {{pendantsCategoryId}},\n    \"collectionIds\": [{{summerCollectionId}}, {{officeCollectionId}}],\n    \"attributeValueIds\": [{{silverValueId}}, {{styleContemporaryId}}]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create - Emerald Pendant",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.collectionVariables.set('emeraldPendantId', jsonData.id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"NECK-G-EMR-001\",\n    \"name\": \"Emerald Pendant Necklace\",\n    \"description\": \"Exquisite 18K gold necklace with emerald gemstone\",\n    \"basePrice\": 1899.99,\n    \"isActive\": true,\n    \"categoryId\": {{pendantsCategoryId}},\n    \"collectionIds\": [{{festivalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{emeraldValueId}}, {{purity18KId}}, {{styleVintageId}}]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ],
+          "description": "Bulk create all Necklace products."
+        },
+        {
+          "name": "ADMIN Creates Product - BANGLES",
+          "item": [
+            {
+              "name": "Create - Traditional Gold Bangle",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.collectionVariables.set('traditionalGoldBangleId', jsonData.id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"BANG-G-TRAD-001\",\n    \"name\": \"Traditional 22K Gold Bangle\",\n    \"description\": \"Heavy traditional 22K gold bangle with intricate design\",\n    \"basePrice\": 5999.99,\n    \"isActive\": true,\n    \"categoryId\": {{traditionalBanglesCategoryId}},\n    \"collectionIds\": [{{festivalCollectionId}}, {{bridalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{purity22KId}}, {{sizeMediumId}}, {{styleTraditionalId}}]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create - Silver Cuff Bangle",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.collectionVariables.set('silverCuffBangleId', jsonData.id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"BANG-S-CUFF-001\",\n    \"name\": \"Contemporary Silver Cuff Bangle\",\n    \"description\": \"Modern silver cuff bangle with sleek design\",\n    \"basePrice\": 299.99,\n    \"isActive\": true,\n    \"categoryId\": {{cuffBanglesCategoryId}},\n    \"collectionIds\": [{{summerCollectionId}}, {{officeCollectionId}}],\n    \"attributeValueIds\": [{{silverValueId}}, {{sizeLargeId}}, {{styleContemporaryId}}]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create - Diamond Bangle Set",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.collectionVariables.set('diamondBangleSetId', jsonData.id);"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"BANG-G-DIA-SET-001\",\n    \"name\": \"Diamond Bangle Set (Pair)\",\n    \"description\": \"Pair of 18K gold bangles with diamond accents\",\n    \"basePrice\": 7999.99,\n    \"isActive\": true,\n    \"categoryId\": {{traditionalBanglesCategoryId}},\n    \"collectionIds\": [{{bridalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{diamondValueId}}, {{purity18KId}}, {{sizeMediumId}}, {{styleContemporaryId}}]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ],
+          "description": "Bulk create all Bangle products."
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminAccessToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "id": "6d3a8e1e-4b4a-4b2a-a8f8-2c2e0a8d7e0c",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript"
           }
         },
         {
-          "name": "Create - Platinum Engagement Ring",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('platinumEngagementRingId', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"RING-P-ENG-001\",\n    \"name\": \"Platinum Diamond Engagement Ring\",\n    \"description\": \"Stunning platinum ring with 1 carat diamond\",\n    \"basePrice\": 2999.99,\n    \"isActive\": true,\n    \"categoryId\": {{engagementRingsCategoryId}},\n    \"collectionIds\": [{{bridalCollectionId}}],\n    \"attributeValueIds\": [{{platinumValueId}}, {{diamondValueId}}, {{sizeMediumId}}, {{styleContemporaryId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Rose Gold Wedding Band",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('roseGoldWeddingBandId', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"RING-RG-WED-001\",\n    \"name\": \"Rose Gold Wedding Band\",\n    \"description\": \"Beautiful 18K rose gold wedding band\",\n    \"basePrice\": 899.99,\n    \"isActive\": true,\n    \"categoryId\": {{weddingBandsCategoryId}},\n    \"collectionIds\": [{{bridalCollectionId}}],\n    \"attributeValueIds\": [{{roseGoldValueId}}, {{purity18KId}}, {{sizeLargeId}}, {{styleContemporaryId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Silver Fashion Ring",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('silverFashionRingId', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"RING-S-FASH-001\",\n    \"name\": \"Contemporary Silver Ring\",\n    \"description\": \"Modern silver ring with minimalist design\",\n    \"basePrice\": 199.99,\n    \"isActive\": true,\n    \"categoryId\": {{fashionRingsCategoryId}},\n    \"collectionIds\": [{{summerCollectionId}}, {{officeCollectionId}}],\n    \"attributeValueIds\": [{{silverValueId}}, {{sizeSmallId}}, {{styleContemporaryId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Ruby Gold Ring",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('rubyGoldRingId', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"RING-G-RUBY-001\",\n    \"name\": \"Gold Ring with Ruby\",\n    \"description\": \"Elegant 18K gold ring with ruby gemstone\",\n    \"basePrice\": 1599.99,\n    \"isActive\": true,\n    \"categoryId\": {{fashionRingsCategoryId}},\n    \"collectionIds\": [{{festivalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{rubyValueId}}, {{purity18KId}}, {{sizeMediumId}}, {{styleTraditionalId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
+          "listen": "test",
+          "script": {
+            "id": "e4a2d7f8-4a4b-4b2a-a8f8-2c2e0a8d7e0c",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript"
           }
         }
       ]
     },
     {
-      "name": "7. Products - NECKLACES",
-      "description": "Create various necklace products",
+      "name": "4. ADMIN: Image & Stock Setup (Bulk)",
+      "description": "Admin adds images and central warehouse stock for all the newly created products.",
       "item": [
         {
-          "name": "Create - Diamond Pendant Necklace",
+          "name": "Add Image - Classic Gold Ring (Primary)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('diamondPendantId', jsonData.id);"
-                ]
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"NECK-G-DIA-001\",\n    \"name\": \"Diamond Pendant Necklace\",\n    \"description\": \"Stunning 18K gold necklace with diamond pendant\",\n    \"basePrice\": 2499.99,\n    \"isActive\": true,\n    \"categoryId\": {{pendantsCategoryId}},\n    \"collectionIds\": [{{bridalCollectionId}}, {{festivalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{diamondValueId}}, {{purity18KId}}, {{styleTraditionalId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Gold Chain Necklace",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('goldChainId', jsonData.id);"
-                ]
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
               }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"NECK-G-CHAIN-001\",\n    \"name\": \"22K Gold Chain Necklace\",\n    \"description\": \"Traditional 22K gold chain, perfect for everyday wear\",\n    \"basePrice\": 3999.99,\n    \"isActive\": true,\n    \"categoryId\": {{chainsCategoryId}},\n    \"collectionIds\": [{{festivalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{purity22KId}}, {{styleTraditionalId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Silver Pendant Necklace",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('silverPendantId', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"NECK-S-PEND-001\",\n    \"name\": \"Contemporary Silver Pendant\",\n    \"description\": \"Modern silver pendant necklace with sleek design\",\n    \"basePrice\": 399.99,\n    \"isActive\": true,\n    \"categoryId\": {{pendantsCategoryId}},\n    \"collectionIds\": [{{summerCollectionId}}, {{officeCollectionId}}],\n    \"attributeValueIds\": [{{silverValueId}}, {{styleContemporaryId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Emerald Pendant",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('emeraldPendantId', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"NECK-G-EMR-001\",\n    \"name\": \"Emerald Pendant Necklace\",\n    \"description\": \"Exquisite 18K gold necklace with emerald gemstone\",\n    \"basePrice\": 1899.99,\n    \"isActive\": true,\n    \"categoryId\": {{pendantsCategoryId}},\n    \"collectionIds\": [{{festivalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{emeraldValueId}}, {{purity18KId}}, {{styleVintageId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Platinum Statement Necklace",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('platinumStatementId', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"NECK-P-STMT-001\",\n    \"name\": \"Platinum Statement Necklace\",\n    \"description\": \"Bold platinum necklace for special occasions\",\n    \"basePrice\": 4999.99,\n    \"isActive\": true,\n    \"categoryId\": {{necklacesCategoryId}},\n    \"collectionIds\": [{{bridalCollectionId}}],\n    \"attributeValueIds\": [{{platinumValueId}}, {{diamondValueId}}, {{styleContemporaryId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "8. Products - BANGLES",
-      "description": "Create various bangle products",
-      "item": [
-        {
-          "name": "Create - Traditional Gold Bangle",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('traditionalGoldBangleId', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"BANG-G-TRAD-001\",\n    \"name\": \"Traditional 22K Gold Bangle\",\n    \"description\": \"Heavy traditional 22K gold bangle with intricate design\",\n    \"basePrice\": 5999.99,\n    \"isActive\": true,\n    \"categoryId\": {{traditionalBanglesCategoryId}},\n    \"collectionIds\": [{{festivalCollectionId}}, {{bridalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{purity22KId}}, {{sizeMediumId}}, {{styleTraditionalId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Silver Cuff Bangle",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('silverCuffBangleId', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"BANG-S-CUFF-001\",\n    \"name\": \"Contemporary Silver Cuff Bangle\",\n    \"description\": \"Modern silver cuff bangle with sleek design\",\n    \"basePrice\": 299.99,\n    \"isActive\": true,\n    \"categoryId\": {{cuffBanglesCategoryId}},\n    \"collectionIds\": [{{summerCollectionId}}, {{officeCollectionId}}],\n    \"attributeValueIds\": [{{silverValueId}}, {{sizeLargeId}}, {{styleContemporaryId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Diamond Bangle Set",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('diamondBangleSetId', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"BANG-G-DIA-SET-001\",\n    \"name\": \"Diamond Bangle Set (Pair)\",\n    \"description\": \"Pair of 18K gold bangles with diamond accents\",\n    \"basePrice\": 7999.99,\n    \"isActive\": true,\n    \"categoryId\": {{traditionalBanglesCategoryId}},\n    \"collectionIds\": [{{bridalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{diamondValueId}}, {{purity18KId}}, {{sizeMediumId}}, {{styleContemporaryId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Gold Bangle Set (6 pieces)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('goldBangleSet6Id', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"BANG-G-SET6-001\",\n    \"name\": \"Traditional Gold Bangle Set - 6 Pieces\",\n    \"description\": \"Set of 6 traditional 18K gold bangles\",\n    \"basePrice\": 12999.99,\n    \"isActive\": true,\n    \"categoryId\": {{traditionalBanglesCategoryId}},\n    \"collectionIds\": [{{festivalCollectionId}}, {{bridalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{purity18KId}}, {{sizeSmallId}}, {{styleTraditionalId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Rose Gold Charm Bangle",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "pm.collectionVariables.set('roseGoldCharmBangleId', jsonData.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"BANG-RG-CHARM-001\",\n    \"name\": \"Rose Gold Charm Bangle\",\n    \"description\": \"Trendy rose gold bangle with charm attachments\",\n    \"basePrice\": 799.99,\n    \"isActive\": true,\n    \"categoryId\": {{cuffBanglesCategoryId}},\n    \"collectionIds\": [{{summerCollectionId}}],\n    \"attributeValueIds\": [{{roseGoldValueId}}, {{purity14KId}}, {{sizeMediumId}}, {{styleContemporaryId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "9. Product Images",
-      "description": "Add images to products",
-      "item": [
-        {
-          "name": "Add Image to Classic Gold Ring (Primary)",
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"productId\": \"{{classicGoldRingId}}\",\n    \"imageUrl\": \"https://example.com/images/classic-gold-ring-front.jpg\",\n    \"isPrimary\": true\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/product-images",
-              "host": ["{{baseUrl}}"],
-              "path": ["product-images"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-images"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Add Image to Classic Gold Ring (Side View)",
+          "name": "Add Image - Classic Gold Ring (Side)",
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"productId\": \"{{classicGoldRingId}}\",\n    \"imageUrl\": \"https://example.com/images/classic-gold-ring-side.jpg\",\n    \"isPrimary\": false\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/product-images",
-              "host": ["{{baseUrl}}"],
-              "path": ["product-images"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-images"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Add Image to Platinum Engagement Ring",
+          "name": "Add Image - Platinum Engagement Ring",
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"productId\": \"{{platinumEngagementRingId}}\",\n    \"imageUrl\": \"https://example.com/images/platinum-engagement-ring.jpg\",\n    \"isPrimary\": true\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/product-images",
-              "host": ["{{baseUrl}}"],
-              "path": ["product-images"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-images"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Add Image to Diamond Pendant",
+          "name": "Add Image - Diamond Pendant",
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"productId\": \"{{diamondPendantId}}\",\n    \"imageUrl\": \"https://example.com/images/diamond-pendant.jpg\",\n    \"isPrimary\": true\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/product-images",
-              "host": ["{{baseUrl}}"],
-              "path": ["product-images"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-images"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Add Image to Traditional Gold Bangle",
+          "name": "Add Image - Traditional Gold Bangle",
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"productId\": \"{{traditionalGoldBangleId}}\",\n    \"imageUrl\": \"https://example.com/images/traditional-gold-bangle.jpg\",\n    \"isPrimary\": true\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/product-images",
-              "host": ["{{baseUrl}}"],
-              "path": ["product-images"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product-images"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Get Images for Product",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/product-images?productId={{classicGoldRingId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["product-images"],
-              "query": [{"key": "productId", "value": "{{classicGoldRingId}}"}]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "10. Stock Management",
-      "description": "Add stock to central warehouse and stores",
-      "item": [
-        {
           "name": "Add Stock - Classic Gold Ring (Central)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"productId\": \"{{classicGoldRingId}}\",\n    \"storeId\": null,\n    \"quantity\": 100\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/stock-items",
-              "host": ["{{baseUrl}}"],
-              "path": ["stock-items"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-items"
+              ]
             }
-          }
-        },
-        {
-          "name": "Add Stock - Classic Gold Ring (Main Store)",
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"productId\": \"{{classicGoldRingId}}\",\n    \"storeId\": \"{{mainStoreId}}\",\n    \"quantity\": 25\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/stock-items",
-              "host": ["{{baseUrl}}"],
-              "path": ["stock-items"]
-            }
-          }
-        },
-        {
-          "name": "Add Stock - Classic Gold Ring (Mall Store)",
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"productId\": \"{{classicGoldRingId}}\",\n    \"storeId\": \"{{mallStoreId}}\",\n    \"quantity\": 15\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/stock-items",
-              "host": ["{{baseUrl}}"],
-              "path": ["stock-items"]
-            }
-          }
+          },
+          "response": []
         },
         {
           "name": "Add Stock - Platinum Engagement Ring (Central)",
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n    \"productId\": \"{{platinumEngagementRingId}}\",\n    \"storeId\": null,\n    \"quantity\": 50\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/stock-items",
-              "host": ["{{baseUrl}}"],
-              "path": ["stock-items"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-items"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Add Stock - Diamond Pendant (All Stores)",
+          "name": "Add Stock - Diamond Pendant (Central)",
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"productId\": \"{{diamondPendantId}}\",\n    \"storeId\": \"{{mainStoreId}}\",\n    \"quantity\": 20\n}"
+              "raw": "{\n    \"productId\": \"{{diamondPendantId}}\",\n    \"storeId\": null,\n    \"quantity\": 75\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/stock-items",
-              "host": ["{{baseUrl}}"],
-              "path": ["stock-items"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-items"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Add Stock - Traditional Gold Bangle (Central)",
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"productId\": \"{{traditionalGoldBangleId}}\",\n    \"storeId\": null,\n    \"quantity\": 75\n}"
+              "raw": "{\n    \"productId\": \"{{traditionalGoldBangleId}}\",\n    \"storeId\": null,\n    \"quantity\": 30\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/stock-items",
-              "host": ["{{baseUrl}}"],
-              "path": ["stock-items"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-items"
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Get All Stock Items",
+          "name": "Add Stock - Silver Cuff Bangle (Central)",
           "request": {
-            "method": "GET",
-            "header": [],
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"productId\": \"{{silverCuffBangleId}}\",\n    \"storeId\": null,\n    \"quantity\": 150\n}"
+            },
             "url": {
               "raw": "{{baseUrl}}/stock-items",
-              "host": ["{{baseUrl}}"],
-              "path": ["stock-items"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-items"
+              ]
             }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminAccessToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "id": "7e8f0a1b-4b4a-4b2a-a8f8-2c2e0a8d7e0c",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript"
           }
         },
         {
-          "name": "Get Stock for Specific Store",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/stock-items?storeId={{mainStoreId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["stock-items"],
-              "query": [{"key": "storeId", "value": "{{mainStoreId}}"}]
-            }
-          }
-        },
-        {
-          "name": "Get Central Warehouse Stock",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/stock-items?isCentral=true",
-              "host": ["{{baseUrl}}"],
-              "path": ["stock-items"],
-              "query": [{"key": "isCentral", "value": "true"}]
-            }
-          }
-        },
-        {
-          "name": "Get Stock for Specific Product",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/stock-items?productId={{classicGoldRingId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["stock-items"],
-              "query": [{"key": "productId", "value": "{{classicGoldRingId}}"}]
-            }
+          "listen": "test",
+          "script": {
+            "id": "e4a2d7f8-4a4b-4b2a-a8f8-2c2e0a8d7e0c",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript"
           }
         }
       ]
     },
     {
-      "name": "11. Advanced Product Filtering",
-      "description": "Test various filter combinations and pagination",
+      "name": "5. STORE MANAGER: Stock Management",
+      "description": "The Store Manager logs in and performs their specific duties.",
+      "item": [
+        {
+          "name": "Store Manager Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.collectionVariables.set(\"storeManagerAccessToken\", jsonData.accessToken);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"store-manager@app.com\",\n    \"password\": \"Password@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "The Store Manager logs in with the credentials the Admin created for them. Saves the `storeManagerAccessToken`."
+          },
+          "response": []
+        },
+        {
+          "name": "(FAIL) Store Manager Tries to Create Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 403 Forbidden\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sku\": \"RING-FAIL-001\",\n    \"name\": \"Test Product Fail\",\n    \"basePrice\": 99.99\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ]
+            },
+            "description": "A security test. The Store Manager (who only has 'ROLE_STORE_MANAGER') should NOT be allowed to create products. We expect a 403 Forbidden."
+          },
+          "response": []
+        },
+        {
+          "name": "(SUCCESS) Store Manager Adds Stock to Store",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.collectionVariables.set(\"mainStoreStockItemId\", jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"productId\": \"{{classicGoldRingId}}\",\n    \"storeId\": \"{{mainStoreId}}\",\n    \"quantity\": 25\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/stock-items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-items"
+              ]
+            },
+            "description": "This is the Store Manager's correct role. They add stock for a product to their specific store (`mainStoreId`)."
+          },
+          "response": []
+        },
+        {
+          "name": "(SUCCESS) Store Manager Updates Stock",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Quantity is updated to 30\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.quantity).to.eql(30);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"productId\": \"{{classicGoldRingId}}\",\n    \"storeId\": \"{{mainStoreId}}\",\n    \"quantity\": 30\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/stock-items/{{mainStoreStockItemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-items",
+                "{{mainStoreStockItemId}}"
+              ]
+            },
+            "description": "The Store Manager updates the stock quantity for the item they just created."
+          },
+          "response": []
+        },
+        {
+          "name": "Store Manager Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "The Store Manager logs out. Their token will be added to the deny list."
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{storeManagerAccessToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "id": "e4e9f7b3-4b4a-4b2a-a8f8-2c2e0a8d7e0c",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "id": "e4a2d7f8-4a4b-4b2a-a8f8-2c2e0a8d7e0c",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. CUSTOMER: Browse & Filter (Bulk)",
+      "description": "An anonymous user (or a logged-in customer) browses the public GET endpoints. No auth token is required. This folder contains all the bulk filtering tests.",
       "item": [
         {
           "name": "Get All Products",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Response contains multiple products\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.content.length).to.be.above(5);",
+                  "});",
+                  ""
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ]
             }
-          }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Single Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Product name is correct\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.name).to.eql(\"Platinum Diamond Engagement Ring\");",
+                  "});",
+                  "pm.test(\"Product has images and attributes\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.images.length).to.be.above(0);",
+                  "    pm.expect(jsonData.attributes.length).to.be.above(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{platinumEngagementRingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{platinumEngagementRingId}}"
+              ]
+            }
+          },
+          "response": []
         },
         {
           "name": "Filter by Category - Rings",
@@ -1898,11 +2713,21 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?categoryId={{ringsCategoryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "categoryId", "value": "{{ringsCategoryId}}"}]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{ringsCategoryId}}"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Filter by Category - Necklaces",
@@ -1911,11 +2736,21 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?categoryId={{necklacesCategoryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "categoryId", "value": "{{necklacesCategoryId}}"}]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{necklacesCategoryId}}"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Filter by Category - Bangles",
@@ -1924,11 +2759,21 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?categoryId={{banglesCategoryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "categoryId", "value": "{{banglesCategoryId}}"}]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "categoryId",
+                  "value": "{{banglesCategoryId}}"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Filter by Collection - Bridal",
@@ -1937,11 +2782,21 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?collectionId={{bridalCollectionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "collectionId", "value": "{{bridalCollectionId}}"}]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "collectionId",
+                  "value": "{{bridalCollectionId}}"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Filter by Attribute - Gold",
@@ -1950,11 +2805,21 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?attributeValueId={{goldValueId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "attributeValueId", "value": "{{goldValueId}}"}]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "attributeValueId",
+                  "value": "{{goldValueId}}"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Filter by Attribute - Diamond",
@@ -1963,11 +2828,21 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?attributeValueId={{diamondValueId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "attributeValueId", "value": "{{diamondValueId}}"}]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "attributeValueId",
+                  "value": "{{diamondValueId}}"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Filter by Price Range - Under $1000",
@@ -1976,14 +2851,25 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?minPrice=0&maxPrice=1000",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
               "query": [
-                {"key": "minPrice", "value": "0"},
-                {"key": "maxPrice", "value": "1000"}
+                {
+                  "key": "minPrice",
+                  "value": "0"
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "1000"
+                }
               ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Filter by Price Range - $1000 to $3000",
@@ -1992,14 +2878,25 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?minPrice=1000&maxPrice=3000",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
               "query": [
-                {"key": "minPrice", "value": "1000"},
-                {"key": "maxPrice", "value": "3000"}
+                {
+                  "key": "minPrice",
+                  "value": "1000"
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "3000"
+                }
               ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Filter by Price Range - Over $5000",
@@ -2008,24 +2905,44 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?minPrice=5000",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "minPrice", "value": "5000"}]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "minPrice",
+                  "value": "5000"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Search by Name",
+          "name": "Search by Name - 'Gold'",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?name=Gold",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "name", "value": "Gold"}]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "Gold"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Search by SKU",
@@ -2034,24 +2951,21 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?sku=RING-G-001",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "sku", "value": "RING-G-001"}]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "sku",
+                  "value": "RING-G-001"
+                }
+              ]
             }
-          }
-        },
-        {
-          "name": "Filter Active Products Only",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/products?isActive=true",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "isActive", "value": "true"}]
-            }
-          }
+          },
+          "response": []
         },
         {
           "name": "Complex Filter - Gold Rings in Bridal Collection",
@@ -2060,15 +2974,29 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?categoryId={{ringsCategoryId}}&collectionId={{bridalCollectionId}}&attributeValueId={{goldValueId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
               "query": [
-                {"key": "categoryId", "value": "{{ringsCategoryId}}"},
-                {"key": "collectionId", "value": "{{bridalCollectionId}}"},
-                {"key": "attributeValueId", "value": "{{goldValueId}}"}
+                {
+                  "key": "categoryId",
+                  "value": "{{ringsCategoryId}}"
+                },
+                {
+                  "key": "collectionId",
+                  "value": "{{bridalCollectionId}}"
+                },
+                {
+                  "key": "attributeValueId",
+                  "value": "{{goldValueId}}"
+                }
               ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Complex Filter - Diamond Products $1000-$3000",
@@ -2077,15 +3005,29 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?attributeValueId={{diamondValueId}}&minPrice=1000&maxPrice=3000",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
               "query": [
-                {"key": "attributeValueId", "value": "{{diamondValueId}}"},
-                {"key": "minPrice", "value": "1000"},
-                {"key": "maxPrice", "value": "3000"}
+                {
+                  "key": "attributeValueId",
+                  "value": "{{diamondValueId}}"
+                },
+                {
+                  "key": "minPrice",
+                  "value": "1000"
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "3000"
+                }
               ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Pagination - Page 1 (Size 5)",
@@ -2094,14 +3036,25 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?page=0&size=5",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
               "query": [
-                {"key": "page", "value": "0"},
-                {"key": "size", "value": "5"}
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "5"
+                }
               ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Pagination - Page 2 (Size 5)",
@@ -2110,30 +3063,25 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?page=1&size=5",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
               "query": [
-                {"key": "page", "value": "1"},
-                {"key": "size", "value": "5"}
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "5"
+                }
               ]
             }
-          }
-        },
-        {
-          "name": "Pagination - Large Page Size (20)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/products?page=0&size=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [
-                {"key": "page", "value": "0"},
-                {"key": "size", "value": "20"}
-              ]
-            }
-          }
+          },
+          "response": []
         },
         {
           "name": "Sort by Price Ascending",
@@ -2142,11 +3090,21 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?sort=basePrice,asc",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "sort", "value": "basePrice,asc"}]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "sort",
+                  "value": "basePrice,asc"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
           "name": "Sort by Price Descending",
@@ -2155,178 +3113,437 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/products?sort=basePrice,desc",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "sort", "value": "basePrice,desc"}]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "sort",
+                  "value": "basePrice,desc"
+                }
+              ]
             }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Sort by Name",
+          "name": "Get Stock for Specific Store",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Finds the stock item with 30 quantity\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var stockItem = jsonData.content.find(s => s.id === pm.collectionVariables.get(\"mainStoreStockItemId\"));",
+                  "    pm.expect(stockItem).to.exist;",
+                  "    pm.expect(stockItem.quantity).to.eql(30);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/products?sort=name,asc",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
-              "query": [{"key": "sort", "value": "name,asc"}]
+              "raw": "{{baseUrl}}/stock-items?storeId={{mainStoreId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-items"
+              ],
+              "query": [
+                {
+                  "key": "storeId",
+                  "value": "{{mainStoreId}}"
+                }
+              ]
             }
-          }
-        }
-      ]
-    },
-    {
-      "name": "12. Bulk Data - More Products",
-      "description": "Add more products for extensive testing",
-      "item": [
-        {
-          "name": "Create - Platinum Wedding Band",
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"RING-P-WED-002\",\n    \"name\": \"Classic Platinum Wedding Band\",\n    \"description\": \"Timeless platinum wedding band\",\n    \"basePrice\": 1299.99,\n    \"isActive\": true,\n    \"categoryId\": {{weddingBandsCategoryId}},\n    \"collectionIds\": [{{bridalCollectionId}}],\n    \"attributeValueIds\": [{{platinumValueId}}, {{sizeMediumId}}, {{styleTraditionalId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
+          },
+          "response": []
         },
         {
-          "name": "Create - Silver Chain Necklace",
+          "name": "Get Central Warehouse Stock",
           "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"NECK-S-CHAIN-002\",\n    \"name\": \"Silver Link Chain Necklace\",\n    \"description\": \"Delicate silver link chain for everyday wear\",\n    \"basePrice\": 249.99,\n    \"isActive\": true,\n    \"categoryId\": {{chainsCategoryId}},\n    \"collectionIds\": [{{officeCollectionId}}],\n    \"attributeValueIds\": [{{silverValueId}}, {{styleContemporaryId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Gold Bangle Trio",
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"BANG-G-TRIO-002\",\n    \"name\": \"Gold Bangle Trio Set\",\n    \"description\": \"Set of 3 matching 14K gold bangles\",\n    \"basePrice\": 4999.99,\n    \"isActive\": true,\n    \"categoryId\": {{traditionalBanglesCategoryId}},\n    \"collectionIds\": [{{festivalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{purity14KId}}, {{sizeLargeId}}, {{styleTraditionalId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Vintage Ruby Ring",
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"RING-G-RUBY-VINT-001\",\n    \"name\": \"Vintage Ruby Gold Ring\",\n    \"description\": \"Antique style 18K gold ring with ruby\",\n    \"basePrice\": 2299.99,\n    \"isActive\": true,\n    \"categoryId\": {{fashionRingsCategoryId}},\n    \"collectionIds\": [{{festivalCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{rubyValueId}}, {{purity18KId}}, {{sizeSmallId}}, {{styleVintageId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        },
-        {
-          "name": "Create - Contemporary Diamond Necklace",
-          "request": {
-            "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"NECK-P-DIA-CONT-001\",\n    \"name\": \"Contemporary Platinum Diamond Necklace\",\n    \"description\": \"Modern platinum necklace with multiple diamonds\",\n    \"basePrice\": 6999.99,\n    \"isActive\": true,\n    \"categoryId\": {{necklacesCategoryId}},\n    \"collectionIds\": [{{bridalCollectionId}}, {{summerCollectionId}}],\n    \"attributeValueIds\": [{{platinumValueId}}, {{diamondValueId}}, {{styleContemporaryId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "13. Update & Delete Operations",
-      "description": "Test update and delete endpoints",
-      "item": [
-        {
-          "name": "Update Product Price",
-          "request": {
-            "method": "PUT",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"sku\": \"RING-G-001\",\n    \"name\": \"Classic Gold Ring\",\n    \"description\": \"Updated description - Timeless 14K gold ring with elegant design - NOW ON SALE!\",\n    \"basePrice\": 449.99,\n    \"isActive\": true,\n    \"categoryId\": {{fashionRingsCategoryId}},\n    \"collectionIds\": [{{officeCollectionId}}],\n    \"attributeValueIds\": [{{goldValueId}}, {{purity14KId}}, {{sizeMediumId}}, {{styleTraditionalId}}]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products/{{classicGoldRingId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["products", "{{classicGoldRingId}}"]
-            }
-          }
-        },
-        {
-          "name": "Update Category Name",
-          "request": {
-            "method": "PUT",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"name\": \"Fashion & Statement Rings\",\n    \"parentId\": {{ringsCategoryId}}\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/categories/{{fashionRingsCategoryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["categories", "{{fashionRingsCategoryId}}"]
-            }
-          }
-        },
-        {
-          "name": "Update Stock Quantity",
-          "request": {
-            "method": "PUT",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"productId\": \"{{classicGoldRingId}}\",\n    \"storeId\": \"{{mainStoreId}}\",\n    \"quantity\": 30\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/stock-items/{stockItemId}",
-              "host": ["{{baseUrl}}"],
-              "path": ["stock-items", "{stockItemId}"]
-            }
-          }
-        },
-        {
-          "name": "Delete Product Image",
-          "request": {
-            "method": "DELETE",
+            "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/product-images/{imageId}",
-              "host": ["{{baseUrl}}"],
-              "path": ["product-images", "{imageId}"]
+              "raw": "{{baseUrl}}/stock-items?isCentral=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-items"
+              ],
+              "query": [
+                {
+                  "key": "isCentral",
+                  "value": "true"
+                }
+              ]
             }
+          },
+          "response": []
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "id": "c7a8b3d7-4b4a-4b2a-a8f8-2c2e0a8d7e0c",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "id": "e4a2d7f8-4a4b-4b2a-a8f8-2c2e0a8d7e0c",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript"
           }
         }
       ]
+    },
+    {
+      "name": "7. ADMIN: Logout & Cleanup",
+      "description": "The Admin logs out, which invalidates their token.",
+      "item": [
+        {
+          "name": "ADMIN Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// Clear the token so it can't be reused",
+                  "pm.collectionVariables.unset(\"adminAccessToken\");"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminAccessToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "id": "a6b5c4d3-4b4a-4b2a-a8f8-2c2e0a8d7e0c",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "id": "e4a2d7f8-4a4b-4b2a-a8f8-2c2e0a8d7e0c",
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminAccessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "id": "b1a0c9d8-4b4a-4b2a-a8f8-2c2e0a8d7e0c",
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "id": "e4a2d7f8-4a4b-4b2a-a8f8-2c2e0a8d7e0c",
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "adminAccessToken",
+      "value": ""
+    },
+    {
+      "key": "adminUserId",
+      "value": ""
+    },
+    {
+      "key": "mainStoreId",
+      "value": ""
+    },
+    {
+      "key": "mallStoreId",
+      "value": ""
+    },
+    {
+      "key": "metalTypeId",
+      "value": ""
+    },
+    {
+      "key": "gemstoneTypeId",
+      "value": ""
+    },
+    {
+      "key": "purityTypeId",
+      "value": ""
+    },
+    {
+      "key": "sizeTypeId",
+      "value": ""
+    },
+    {
+      "key": "styleTypeId",
+      "value": ""
+    },
+    {
+      "key": "goldValueId",
+      "value": ""
+    },
+    {
+      "key": "silverValueId",
+      "value": ""
+    },
+    {
+      "key": "platinumValueId",
+      "value": ""
+    },
+    {
+      "key": "roseGoldValueId",
+      "value": ""
+    },
+    {
+      "key": "diamondValueId",
+      "value": ""
+    },
+    {
+      "key": "rubyValueId",
+      "value": ""
+    },
+    {
+      "key": "emeraldValueId",
+      "value": ""
+    },
+    {
+      "key": "purity14KId",
+      "value": ""
+    },
+    {
+      "key": "purity18KId",
+      "value": ""
+    },
+    {
+      "key": "purity22KId",
+      "value": ""
+    },
+    {
+      "key": "sizeSmallId",
+      "value": ""
+    },
+    {
+      "key": "sizeMediumId",
+      "value": ""
+    },
+    {
+      "key": "sizeLargeId",
+      "value": ""
+    },
+    {
+      "key": "styleTraditionalId",
+      "value": ""
+    },
+    {
+      "key": "styleContemporaryId",
+      "value": ""
+    },
+    {
+      "key": "styleVintageId",
+      "value": ""
+    },
+    {
+      "key": "ringsCategoryId",
+      "value": ""
+    },
+    {
+      "key": "engagementRingsCategoryId",
+      "value": ""
+    },
+    {
+      "key": "weddingBandsCategoryId",
+      "value": ""
+    },
+    {
+      "key": "fashionRingsCategoryId",
+      "value": ""
+    },
+    {
+      "key": "necklacesCategoryId",
+      "value": ""
+    },
+    {
+      "key": "pendantsCategoryId",
+      "value": ""
+    },
+    {
+      "key": "chainsCategoryId",
+      "value": ""
+    },
+    {
+      "key": "banglesCategoryId",
+      "value": ""
+    },
+    {
+      "key": "traditionalBanglesCategoryId",
+      "value": ""
+    },
+    {
+      "key": "cuffBanglesCategoryId",
+      "value": ""
+    },
+    {
+      "key": "bridalCollectionId",
+      "value": ""
+    },
+    {
+      "key": "summerCollectionId",
+      "value": ""
+    },
+    {
+      "key": "festivalCollectionId",
+      "value": ""
+    },
+    {
+      "key": "officeCollectionId",
+      "value": ""
+    },
+    {
+      "key": "classicGoldRingId",
+      "value": ""
+    },
+    {
+      "key": "platinumEngagementRingId",
+      "value": ""
+    },
+    {
+      "key": "roseGoldWeddingBandId",
+      "value": ""
+    },
+    {
+      "key": "silverFashionRingId",
+      "value": ""
+    },
+    {
+      "key": "rubyGoldRingId",
+      "value": ""
+    },
+    {
+      "key": "diamondPendantId",
+      "value": ""
+    },
+    {
+      "key": "goldChainId",
+      "value": ""
+    },
+    {
+      "key": "silverPendantId",
+      "value": ""
+    },
+    {
+      "key": "emeraldPendantId",
+      "value": ""
+    },
+    {
+      "key": "traditionalGoldBangleId",
+      "value": ""
+    },
+    {
+      "key": "silverCuffBangleId",
+      "value": ""
+    },
+    {
+      "key": "diamondBangleSetId",
+      "value": ""
+    },
+    {
+      "key": "storeManagerUserId",
+      "value": ""
+    },
+    {
+      "key": "storeManagerAccessToken",
+      "value": ""
+    },
+    {
+      "key": "mainStoreStockItemId",
+      "value": ""
     }
   ]
 }
