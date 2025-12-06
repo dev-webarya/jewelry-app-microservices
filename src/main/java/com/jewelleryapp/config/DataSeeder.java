@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,362 +35,353 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        // 1. Seed Roles
-        log.info("Checking for default roles...");
-        List<String> requiredRoles = List.of("ROLE_CUSTOMER", "ROLE_ADMIN", "ROLE_STORE_MANAGER");
-        Map<String, Role> rolesMap = requiredRoles.stream()
-                .map(roleName -> roleRepository.findByName(roleName)
-                        .orElseGet(() -> roleRepository.save(Role.builder().name(roleName).build())))
-                .collect(Collectors.toMap(Role::getName, role -> role));
-        log.info("Roles check complete.");
+        log.info("--- Starting Application Data Seeding ---");
 
-        // 2. Check if database is already seeded
-        if (userRepository.count() > 0) {
-            log.info("Database already contains users. Skipping bulk data seeding.");
+        // 1. Initialize Essential Roles (System Foundation)
+        Map<String, Role> roles = seedRoles();
+
+        // 2. Check if Admin exists. If yes, assume system is already initialized.
+        if (userRepository.findByEmail("admin@app.com").isPresent()) {
+            log.info("System already seeded. Skipping initialization.");
             return;
         }
 
-        log.info("No users found. Proceeding with bulk database seeding...");
+        // 3. Create Super Admin (The Architect)
+        User adminUser = seedAdmin(roles.get("ROLE_ADMIN"));
 
-        // 3. Seed Stores
-        Map<String, Store> stores = seedStores();
-        Store mainStore = stores.get("main");
-        Store mallStore = stores.get("mall");
-
-        // 4. Seed Users (Admin & Store Managers)
-        seedUsers(rolesMap);
-
-        // 5. Seed Full Catalog (Attributes, Categories, Collections)
-        CatalogData catalog = seedCatalog();
-
-        // 6. Seed Bulk Products
+        // 4. Create Global Product Catalog (Admin Responsibility)
+        CatalogData catalog = seedGlobalCatalog();
         List<Product> products = seedProducts(catalog);
 
-        // 7. Seed Stock for all products
-        seedStock(products, mainStore, mallStore);
+        // 5. Create Retail Stores (Admin Responsibility)
+        Map<String, Store> stores = seedStores();
 
-        log.info("Database bulk seeding complete.");
+        // 6. Hire & Assign Store Managers (Admin Responsibility)
+        seedStoreManagers(roles.get("ROLE_STORE_MANAGER"), stores);
+
+        // 7. Stock Stores (Store Manager Responsibility - Simulated)
+        seedInventory(products, stores);
+
+        // 8. Onboard Customers (Public Usage)
+        seedCustomers(roles.get("ROLE_CUSTOMER"));
+
+        log.info("--- Data Seeding Completed Successfully ---");
     }
 
-    private Map<String, Store> seedStores() {
-        log.info("Seeding stores...");
-        Store mainStore = storeRepository.save(Store.builder()
-                .name("Main Street Showroom")
-                .address("123 Main Street, Downtown, New York, NY 10001")
-                .latitude(new BigDecimal("40.7128"))
-                .longitude(new BigDecimal("-74.0060"))
-                .operatingHours("Mon-Sat: 10AM-8PM")
-                .contactPhone("555-0101")
-                .build());
-
-        Store mallStore = storeRepository.save(Store.builder()
-                .name("Grand Mall Branch")
-                .address("456 Shopping Plaza, Level 2, Los Angeles, CA 90001")
-                .latitude(new BigDecimal("34.0522"))
-                .longitude(new BigDecimal("-118.2437"))
-                .operatingHours("Mon-Sun: 10AM-9PM")
-                .contactPhone("555-0102")
-                .build());
-
-        Store boutiqueStore = storeRepository.save(Store.builder()
-                .name("Downtown Boutique")
-                .address("789 Fashion Avenue, Chicago, IL 60601")
-                .latitude(new BigDecimal("41.8781"))
-                .longitude(new BigDecimal("-87.6298"))
-                .operatingHours("Tue-Sat: 11AM-7PM")
-                .contactPhone("555-0103")
-                .build());
-
-        return Map.of("main", mainStore, "mall", mallStore, "boutique", boutiqueStore);
+    private Map<String, Role> seedRoles() {
+        log.info("[Phase 1] Seeding Roles...");
+        List<String> roleNames = List.of("ROLE_CUSTOMER", "ROLE_ADMIN", "ROLE_STORE_MANAGER");
+        return roleNames.stream()
+                .map(name -> roleRepository.findByName(name)
+                        .orElseGet(() -> roleRepository.save(Role.builder().name(name).build())))
+                .collect(Collectors.toMap(Role::getName, role -> role));
     }
 
-    private void seedUsers(Map<String, Role> roles) {
-        log.info("Seeding users (Admin and Store Managers)...");
-        // Admin User
-        userRepository.save(User.builder()
-                .firstName("Admin")
-                .lastName("User")
+    private User seedAdmin(Role adminRole) {
+        log.info("[Phase 1] Seeding Super Admin...");
+        return userRepository.save(User.builder()
+                .firstName("Super")
+                .lastName("Admin")
                 .email("admin@app.com")
                 .password(passwordEncoder.encode("Password@123"))
-                .phoneNumber("9999999999")
-                .roles(Set.of(roles.get("ROLE_ADMIN"), roles.get("ROLE_CUSTOMER")))
-                .isEnabled(true)
-                .build());
-
-        // Store Manager for Main Street
-        userRepository.save(User.builder()
-                .firstName("Main")
-                .lastName("Manager")
-                .email("manager.main@app.com")
-                .password(passwordEncoder.encode("Password@123"))
-                .phoneNumber("8888888888")
-                .roles(Set.of(roles.get("ROLE_STORE_MANAGER"), roles.get("ROLE_CUSTOMER")))
-                .isEnabled(true)
-                .build());
-
-        // Store Manager for Mall Branch
-        userRepository.save(User.builder()
-                .firstName("Mall")
-                .lastName("Manager")
-                .email("manager.mall@app.com")
-                .password(passwordEncoder.encode("Password@123"))
-                .phoneNumber("7777777777")
-                .roles(Set.of(roles.get("ROLE_STORE_MANAGER"), roles.get("ROLE_CUSTOMER")))
+                .phoneNumber("0000000000")
+                .roles(new HashSet<>(Set.of(adminRole))) // Admin has ADMIN role
                 .isEnabled(true)
                 .build());
     }
 
-    private CatalogData seedCatalog() {
-        log.info("Seeding full catalog (attributes, categories, collections)...");
+    private CatalogData seedGlobalCatalog() {
+        log.info("[Phase 2] Seeding Global Catalog (Categories, Attributes, Collections)...");
 
-        // Attribute Types
-        AttributeType metalType = attributeTypeRepository.save(AttributeType.builder().name("Metal Type").build());
-        AttributeType gemstoneType = attributeTypeRepository.save(AttributeType.builder().name("Gemstone").build());
-        AttributeType purityType = attributeTypeRepository.save(AttributeType.builder().name("Purity").build());
-        AttributeType sizeType = attributeTypeRepository.save(AttributeType.builder().name("Size").build());
-        AttributeType styleType = attributeTypeRepository.save(AttributeType.builder().name("Style").build());
+        // --- Attributes ---
+        AttributeType metal = attributeTypeRepository.save(AttributeType.builder().name("Metal").build());
+        AttributeType gemstone = attributeTypeRepository.save(AttributeType.builder().name("Gemstone").build());
+        AttributeType purity = attributeTypeRepository.save(AttributeType.builder().name("Purity").build());
+        AttributeType size = attributeTypeRepository.save(AttributeType.builder().name("Size").build()); // Added Size
 
-        // Attribute Values
-        AttributeValue gold = attributeValueRepository.save(AttributeValue.builder().attributeType(metalType).value("Gold").build());
-        AttributeValue silver = attributeValueRepository.save(AttributeValue.builder().attributeType(metalType).value("Silver").build());
-        AttributeValue platinum = attributeValueRepository.save(AttributeValue.builder().attributeType(metalType).value("Platinum").build());
-        AttributeValue roseGold = attributeValueRepository.save(AttributeValue.builder().attributeType(metalType).value("Rose Gold").build());
+        // Metal Values
+        AttributeValue gold = attributeValueRepository.save(AttributeValue.builder().attributeType(metal).value("Gold").build());
+        AttributeValue silver = attributeValueRepository.save(AttributeValue.builder().attributeType(metal).value("Silver").build());
+        AttributeValue roseGold = attributeValueRepository.save(AttributeValue.builder().attributeType(metal).value("Rose Gold").build());
+        AttributeValue platinum = attributeValueRepository.save(AttributeValue.builder().attributeType(metal).value("Platinum").build());
 
-        AttributeValue diamond = attributeValueRepository.save(AttributeValue.builder().attributeType(gemstoneType).value("Diamond").build());
-        AttributeValue ruby = attributeValueRepository.save(AttributeValue.builder().attributeType(gemstoneType).value("Ruby").build());
-        AttributeValue emerald = attributeValueRepository.save(AttributeValue.builder().attributeType(gemstoneType).value("Emerald").build());
+        // Gemstone Values
+        AttributeValue diamond = attributeValueRepository.save(AttributeValue.builder().attributeType(gemstone).value("Diamond").build());
+        AttributeValue ruby = attributeValueRepository.save(AttributeValue.builder().attributeType(gemstone).value("Ruby").build());
+        AttributeValue emerald = attributeValueRepository.save(AttributeValue.builder().attributeType(gemstone).value("Emerald").build());
+        AttributeValue sapphire = attributeValueRepository.save(AttributeValue.builder().attributeType(gemstone).value("Sapphire").build());
 
-        AttributeValue purity14k = attributeValueRepository.save(AttributeValue.builder().attributeType(purityType).value("14K").build());
-        AttributeValue purity18k = attributeValueRepository.save(AttributeValue.builder().attributeType(purityType).value("18K").build());
-        AttributeValue purity22k = attributeValueRepository.save(AttributeValue.builder().attributeType(purityType).value("22K").build());
+        // Purity Values
+        AttributeValue k14 = attributeValueRepository.save(AttributeValue.builder().attributeType(purity).value("14K").build());
+        AttributeValue k18 = attributeValueRepository.save(AttributeValue.builder().attributeType(purity).value("18K").build());
+        AttributeValue k22 = attributeValueRepository.save(AttributeValue.builder().attributeType(purity).value("22K").build());
+        AttributeValue k24 = attributeValueRepository.save(AttributeValue.builder().attributeType(purity).value("24K").build());
 
-        AttributeValue sizeSmall = attributeValueRepository.save(AttributeValue.builder().attributeType(sizeType).value("Small").build());
-        AttributeValue sizeMedium = attributeValueRepository.save(AttributeValue.builder().attributeType(sizeType).value("Medium").build());
-        AttributeValue sizeLarge = attributeValueRepository.save(AttributeValue.builder().attributeType(sizeType).value("Large").build());
+        // Size Values
+        AttributeValue size6 = attributeValueRepository.save(AttributeValue.builder().attributeType(size).value("6").build());
+        AttributeValue size7 = attributeValueRepository.save(AttributeValue.builder().attributeType(size).value("7").build());
+        AttributeValue size8 = attributeValueRepository.save(AttributeValue.builder().attributeType(size).value("8").build());
 
-        AttributeValue styleTraditional = attributeValueRepository.save(AttributeValue.builder().attributeType(styleType).value("Traditional").build());
-        AttributeValue styleContemporary = attributeValueRepository.save(AttributeValue.builder().attributeType(styleType).value("Contemporary").build());
-        AttributeValue styleVintage = attributeValueRepository.save(AttributeValue.builder().attributeType(styleType).value("Vintage").build());
-
-
-        // Categories
+        // --- Categories ---
         Category rings = categoryRepository.save(Category.builder().name("Rings").build());
-        Category engagementRings = categoryRepository.save(Category.builder().name("Engagement Rings").parent(rings).build());
-        Category weddingBands = categoryRepository.save(Category.builder().name("Wedding Bands").parent(rings).build());
-        Category fashionRings = categoryRepository.save(Category.builder().name("Fashion Rings").parent(rings).build());
-
         Category necklaces = categoryRepository.save(Category.builder().name("Necklaces").build());
-        Category pendants = categoryRepository.save(Category.builder().name("Pendants").parent(necklaces).build());
+        Category earrings = categoryRepository.save(Category.builder().name("Earrings").build());
+        Category bracelets = categoryRepository.save(Category.builder().name("Bracelets").build());
+
+        Category weddingRings = categoryRepository.save(Category.builder().name("Wedding Rings").parent(rings).build());
+        Category engagementRings = categoryRepository.save(Category.builder().name("Engagement Rings").parent(rings).build());
         Category chains = categoryRepository.save(Category.builder().name("Chains").parent(necklaces).build());
+        Category pendants = categoryRepository.save(Category.builder().name("Pendants").parent(necklaces).build());
 
-        Category bangles = categoryRepository.save(Category.builder().name("Bangles").build());
-        Category traditionalBangles = categoryRepository.save(Category.builder().name("Traditional Bangles").parent(bangles).build());
-        Category cuffBangles = categoryRepository.save(Category.builder().name("Cuff Bangles").parent(bangles).build());
-
-        // Collections
-        Collection bridal = collectionRepository.save(Collection.builder().name("Bridal Collection").description("Exclusive designs for your special day").build());
-        Collection summer = collectionRepository.save(Collection.builder().name("Summer 2025").description("Bright and vibrant summer designs").build());
-        Collection festival = collectionRepository.save(Collection.builder().name("Festival Special").description("Traditional jewelry for festivals").build());
-        Collection office = collectionRepository.save(Collection.builder().name("Office Wear").description("Subtle and elegant pieces").build());
+        // --- Collections ---
+        Collection bridal = collectionRepository.save(Collection.builder().name("Bridal 2025").description("Wedding essentials for the modern bride").build());
+        Collection festival = collectionRepository.save(Collection.builder().name("Diwali Special").description("Traditional designs for festive lights").build());
+        Collection office = collectionRepository.save(Collection.builder().name("Office Chic").description("Minimalist jewelry for everyday wear").build());
+        Collection luxury = collectionRepository.save(Collection.builder().name("Royal Heritage").description("Heavy, intricate designs inspired by royalty").build());
 
         return new CatalogData(
-                gold, silver, platinum, roseGold,
-                diamond, ruby, emerald,
-                purity14k, purity18k, purity22k,
-                sizeSmall, sizeMedium, sizeLarge,
-                styleTraditional, styleContemporary, styleVintage,
-                rings, engagementRings, weddingBands, fashionRings,
-                necklaces, pendants, chains,
-                bangles, traditionalBangles, cuffBangles,
-                bridal, summer, festival, office
+                gold, silver, roseGold, platinum,
+                diamond, ruby, emerald, sapphire,
+                k14, k18, k22, k24,
+                size6, size7, size8,
+                rings, weddingRings, engagementRings, necklaces, chains, pendants, earrings, bracelets,
+                bridal, festival, office, luxury
         );
     }
 
     private List<Product> seedProducts(CatalogData c) {
-        log.info("Seeding bulk products...");
-
+        log.info("[Phase 2] Seeding Products...");
         List<Product> products = List.of(
-                // Rings
+                // 1. Wedding Ring (High Value)
                 Product.builder()
-                        .sku("RING-G-001")
-                        .name("Classic Gold Ring")
-                        .description("Timeless 14K gold ring with elegant design")
-                        .basePrice(new BigDecimal("499.99"))
-                        .isActive(true)
-                        .category(c.fashionRings)
-                        .collections(Set.of(c.office))
-                        .attributes(Set.of(c.gold, c.purity14k, c.sizeMedium, c.styleTraditional))
-                        .build(),
-                Product.builder()
-                        .sku("RING-P-ENG-001")
-                        .name("Platinum Diamond Engagement Ring")
-                        .description("Stunning platinum ring with 1 carat diamond")
-                        .basePrice(new BigDecimal("2999.99"))
+                        .sku("RNG-GLD-DIA-001")
+                        .name("Eternal Gold Diamond Ring")
+                        .description("18K Gold ring studded with VVS diamonds. Perfect for engagements.")
+                        .basePrice(new BigDecimal("1200.00"))
                         .isActive(true)
                         .category(c.engagementRings)
                         .collections(Set.of(c.bridal))
-                        .attributes(Set.of(c.platinum, c.diamond, c.sizeMedium, c.styleContemporary))
-                        .build(),
-                Product.builder()
-                        .sku("RING-RG-WED-001")
-                        .name("Rose Gold Wedding Band")
-                        .description("Beautiful 18K rose gold wedding band")
-                        .basePrice(new BigDecimal("899.99"))
-                        .isActive(true)
-                        .category(c.weddingBands)
-                        .collections(Set.of(c.bridal))
-                        .attributes(Set.of(c.roseGold, c.purity18k, c.sizeLarge, c.styleContemporary))
-                        .build(),
-                Product.builder()
-                        .sku("RING-S-FASH-001")
-                        .name("Contemporary Silver Ring")
-                        .description("Modern silver ring with minimalist design")
-                        .basePrice(new BigDecimal("199.99"))
-                        .isActive(true)
-                        .category(c.fashionRings)
-                        .collections(Set.of(c.summer, c.office))
-                        .attributes(Set.of(c.silver, c.sizeSmall, c.styleContemporary))
-                        .build(),
-                Product.builder()
-                        .sku("RING-G-RUBY-001")
-                        .name("Gold Ring with Ruby")
-                        .description("Elegant 18K gold ring with ruby gemstone")
-                        .basePrice(new BigDecimal("1599.99"))
-                        .isActive(true)
-                        .category(c.fashionRings)
-                        .collections(Set.of(c.festival))
-                        .attributes(Set.of(c.gold, c.ruby, c.purity18k, c.sizeMedium, c.styleTraditional))
+                        .attributes(Set.of(c.gold, c.diamond, c.k18, c.size7))
                         .build(),
 
-                // Necklaces
+                // 2. Silver Chain (Low Value, High Volume)
                 Product.builder()
-                        .sku("NECK-G-DIA-001")
-                        .name("Diamond Pendant Necklace")
-                        .description("Stunning 18K gold necklace with diamond pendant")
-                        .basePrice(new BigDecimal("2499.99"))
-                        .isActive(true)
-                        .category(c.pendants)
-                        .collections(Set.of(c.bridal, c.festival))
-                        .attributes(Set.of(c.gold, c.diamond, c.purity18k, c.styleTraditional))
-                        .build(),
-                Product.builder()
-                        .sku("NECK-G-CHAIN-001")
-                        .name("22K Gold Chain Necklace")
-                        .description("Traditional 22K gold chain, perfect for everyday wear")
-                        .basePrice(new BigDecimal("3999.99"))
+                        .sku("NCK-SIL-001")
+                        .name("Modern Silver Chain")
+                        .description("Sleek sterling silver chain for daily wear. Anti-tarnish coating.")
+                        .basePrice(new BigDecimal("150.00"))
                         .isActive(true)
                         .category(c.chains)
-                        .collections(Set.of(c.festival))
-                        .attributes(Set.of(c.gold, c.purity22k, c.styleTraditional))
-                        .build(),
-                Product.builder()
-                        .sku("NECK-S-PEND-001")
-                        .name("Contemporary Silver Pendant")
-                        .description("Modern silver pendant necklace with sleek design")
-                        .basePrice(new BigDecimal("399.99"))
-                        .isActive(true)
-                        .category(c.pendants)
-                        .collections(Set.of(c.summer, c.office))
-                        .attributes(Set.of(c.silver, c.styleContemporary))
-                        .build(),
-                Product.builder()
-                        .sku("NECK-G-EMR-001")
-                        .name("Emerald Pendant Necklace")
-                        .description("Exquisite 18K gold necklace with emerald gemstone")
-                        .basePrice(new BigDecimal("1899.99"))
-                        .isActive(true)
-                        .category(c.pendants)
-                        .collections(Set.of(c.festival))
-                        .attributes(Set.of(c.gold, c.emerald, c.purity18k, c.styleVintage))
+                        .collections(Set.of(c.office, c.festival))
+                        .attributes(Set.of(c.silver))
                         .build(),
 
-                // Bangles
+                // 3. Traditional Band (Mid Value)
                 Product.builder()
-                        .sku("BANG-G-TRAD-001")
-                        .name("Traditional 22K Gold Bangle")
-                        .description("Heavy traditional 22K gold bangle with intricate design")
-                        .basePrice(new BigDecimal("5999.99"))
+                        .sku("RNG-GLD-PLN-002")
+                        .name("Traditional Gold Band")
+                        .description("Plain 22K gold band, timeless design. Ideal for weddings.")
+                        .basePrice(new BigDecimal("800.00"))
                         .isActive(true)
-                        .category(c.traditionalBangles)
-                        .collections(Set.of(c.festival, c.bridal))
-                        .attributes(Set.of(c.gold, c.purity22k, c.sizeMedium, c.styleTraditional))
+                        .category(c.weddingRings)
+                        .collections(Set.of(c.bridal, c.festival))
+                        .attributes(Set.of(c.gold, c.k22, c.size8))
                         .build(),
+
+                // 4. Rose Gold Pendant (Trendy)
                 Product.builder()
-                        .sku("BANG-S-CUFF-001")
-                        .name("Contemporary Silver Cuff Bangle")
-                        .description("Modern silver cuff bangle with sleek design")
-                        .basePrice(new BigDecimal("299.99"))
+                        .sku("PND-RGLD-RUBY-001")
+                        .name("Rose Gold Ruby Pendant")
+                        .description("Delicate 14K rose gold pendant featuring a heart-shaped ruby.")
+                        .basePrice(new BigDecimal("450.00"))
                         .isActive(true)
-                        .category(c.cuffBangles)
-                        .collections(Set.of(c.summer, c.office))
-                        .attributes(Set.of(c.silver, c.sizeLarge, c.styleContemporary))
+                        .category(c.pendants)
+                        .collections(Set.of(c.office))
+                        .attributes(Set.of(c.roseGold, c.ruby, c.k14))
                         .build(),
+
+                // 5. Platinum Earrings (Luxury)
                 Product.builder()
-                        .sku("BANG-G-DIA-SET-001")
-                        .name("Diamond Bangle Set (Pair)")
-                        .description("Pair of 18K gold bangles with diamond accents")
-                        .basePrice(new BigDecimal("7999.99"))
+                        .sku("EAR-PLT-DIA-001")
+                        .name("Platinum Solitaire Studs")
+                        .description("Classic platinum studs with 0.5ct diamonds. A symbol of elegance.")
+                        .basePrice(new BigDecimal("2500.00"))
                         .isActive(true)
-                        .category(c.traditionalBangles)
-                        .collections(Set.of(c.bridal))
-                        .attributes(Set.of(c.gold, c.diamond, c.purity18k, c.sizeMedium, c.styleContemporary))
+                        .category(c.earrings)
+                        .collections(Set.of(c.luxury, c.bridal))
+                        .attributes(Set.of(c.platinum, c.diamond))
+                        .build(),
+
+                // 6. Emerald Bracelet (Statement Piece)
+                Product.builder()
+                        .sku("BRA-GLD-EMR-001")
+                        .name("Royal Emerald Bracelet")
+                        .description("Heavy 22K gold bracelet encrusted with Colombian emeralds.")
+                        .basePrice(new BigDecimal("3500.00"))
+                        .isActive(true)
+                        .category(c.bracelets)
+                        .collections(Set.of(c.luxury, c.festival))
+                        .attributes(Set.of(c.gold, c.emerald, c.k22))
+                        .build(),
+
+                // 7. Sapphire Ring (Cocktail Ring)
+                Product.builder()
+                        .sku("RNG-SIL-SAPP-001")
+                        .name("Midnight Sapphire Ring")
+                        .description("Sterling silver ring with a large blue sapphire center stone.")
+                        .basePrice(new BigDecimal("300.00"))
+                        .isActive(true)
+                        .category(c.rings)
+                        .collections(Set.of(c.festival))
+                        .attributes(Set.of(c.silver, c.sapphire, c.size6))
                         .build()
         );
-
         return productRepository.saveAll(products);
     }
 
-    private void seedStock(List<Product> products, Store mainStore, Store mallStore) {
-        log.info("Seeding stock for all products...");
-
-        // Add central warehouse stock for every product
-        for (Product product : products) {
-            stockItemRepository.save(StockItem.builder()
-                    .product(product)
-                    .store(null) // null storeId means central warehouse
-                    .quantity(100) // Default 100 in central
-                    .build());
-        }
-
-        // Add specific local stock for a few items
-        stockItemRepository.save(StockItem.builder()
-                .product(products.get(0)) // Classic Gold Ring
-                .store(mainStore)
-                .quantity(25)
+    private Map<String, Store> seedStores() {
+        log.info("[Phase 3] Seeding Retail Stores...");
+        Store nyStore = storeRepository.save(Store.builder()
+                .name("NYC Flagship Store")
+                .address("5th Avenue, New York, NY")
+                .contactPhone("212-555-0199")
+                .operatingHours("10 AM - 9 PM")
                 .build());
 
-        stockItemRepository.save(StockItem.builder()
-                .product(products.get(0)) // Classic Gold Ring
-                .store(mallStore)
-                .quantity(15)
+        Store laStore = storeRepository.save(Store.builder()
+                .name("LA Boutique")
+                .address("Rodeo Drive, Beverly Hills, CA")
+                .contactPhone("310-555-0188")
+                .operatingHours("11 AM - 8 PM")
                 .build());
 
-        stockItemRepository.save(StockItem.builder()
-                .product(products.get(1)) // Platinum Engagement Ring
-                .store(mainStore)
-                .quantity(10)
+        Store chiStore = storeRepository.save(Store.builder()
+                .name("Chicago Outlet")
+                .address("Michigan Avenue, Chicago, IL")
+                .contactPhone("312-555-0177")
+                .operatingHours("9 AM - 6 PM")
                 .build());
 
-        stockItemRepository.save(StockItem.builder()
-                .product(products.get(10)) // Silver Cuff Bangle
-                .store(mallStore)
-                .quantity(30)
+        return Map.of("NYC", nyStore, "LA", laStore, "CHI", chiStore);
+    }
+
+    private void seedStoreManagers(Role managerRole, Map<String, Store> stores) {
+        log.info("[Phase 4] Hiring Store Managers...");
+
+        // NYC Manager
+        userRepository.save(User.builder()
+                .firstName("John")
+                .lastName("Manager")
+                .email("manager.nyc@app.com")
+                .password(passwordEncoder.encode("Password@123"))
+                .phoneNumber("9876543210")
+                .roles(new HashSet<>(Set.of(managerRole)))
+                .managedStore(stores.get("NYC")) // Assigned to NYC Store
+                .isEnabled(true)
+                .build());
+
+        // LA Manager
+        userRepository.save(User.builder()
+                .firstName("Sarah")
+                .lastName("Manager")
+                .email("manager.la@app.com")
+                .password(passwordEncoder.encode("Password@123"))
+                .phoneNumber("9876543211")
+                .roles(new HashSet<>(Set.of(managerRole)))
+                .managedStore(stores.get("LA")) // Assigned to LA Store
+                .isEnabled(true)
+                .build());
+
+        // Chicago Manager
+        userRepository.save(User.builder()
+                .firstName("Mike")
+                .lastName("Manager")
+                .email("manager.chi@app.com")
+                .password(passwordEncoder.encode("Password@123"))
+                .phoneNumber("9876543212")
+                .roles(new HashSet<>(Set.of(managerRole)))
+                .managedStore(stores.get("CHI")) // Assigned to Chicago Store
+                .isEnabled(true)
                 .build());
     }
 
-    // Helper record to pass catalog data
+    private void seedInventory(List<Product> products, Map<String, Store> stores) {
+        log.info("[Phase 5] Distributing Inventory to Stores...");
+
+        // Indices from the product list above:
+        // 0: Diamond Ring, 1: Silver Chain, 2: Gold Band, 3: Ruby Pendant
+        // 4: Platinum Studs, 5: Emerald Bracelet, 6: Sapphire Ring
+
+        Product diamondRing = products.get(0);
+        Product silverChain = products.get(1);
+        Product goldBand = products.get(2);
+        Product rubyPendant = products.get(3);
+        Product platinumStuds = products.get(4);
+        Product emeraldBracelet = products.get(5);
+        Product sapphireRing = products.get(6);
+
+        Store nyc = stores.get("NYC");
+        Store la = stores.get("LA");
+        Store chi = stores.get("CHI");
+
+        // Central Warehouse Stock (Unassigned Store) - The "Mother Lode"
+        stockItemRepository.save(StockItem.builder().product(diamondRing).store(null).quantity(500).build());
+        stockItemRepository.save(StockItem.builder().product(silverChain).store(null).quantity(1000).build());
+        stockItemRepository.save(StockItem.builder().product(goldBand).store(null).quantity(800).build());
+        stockItemRepository.save(StockItem.builder().product(platinumStuds).store(null).quantity(200).build());
+
+        // NYC Stock (Flagship - High Inventory, Luxury Items)
+        stockItemRepository.save(StockItem.builder().product(diamondRing).store(nyc).quantity(50).build());
+        stockItemRepository.save(StockItem.builder().product(goldBand).store(nyc).quantity(30).build());
+        stockItemRepository.save(StockItem.builder().product(platinumStuds).store(nyc).quantity(15).build()); // Only NYC has studs initially
+        stockItemRepository.save(StockItem.builder().product(emeraldBracelet).store(nyc).quantity(5).build()); // Rare item
+
+        // LA Stock (Boutique - Trendy Items)
+        stockItemRepository.save(StockItem.builder().product(diamondRing).store(la).quantity(20).build());
+        stockItemRepository.save(StockItem.builder().product(rubyPendant).store(la).quantity(40).build()); // LA loves Rose Gold
+        stockItemRepository.save(StockItem.builder().product(silverChain).store(la).quantity(100).build());
+
+        // Chicago Stock (Outlet - High Volume, Affordable)
+        stockItemRepository.save(StockItem.builder().product(silverChain).store(chi).quantity(200).build());
+        stockItemRepository.save(StockItem.builder().product(sapphireRing).store(chi).quantity(50).build());
+        stockItemRepository.save(StockItem.builder().product(goldBand).store(chi).quantity(10).build());
+    }
+
+    private void seedCustomers(Role customerRole) {
+        log.info("[Phase 6] Onboarding Customers...");
+        userRepository.save(User.builder()
+                .firstName("Alice")
+                .lastName("Customer")
+                .email("alice@test.com")
+                .password(passwordEncoder.encode("Password@123"))
+                .phoneNumber("1231231234")
+                .roles(new HashSet<>(Set.of(customerRole)))
+                .isEnabled(true)
+                .build());
+
+        userRepository.save(User.builder()
+                .firstName("Bob")
+                .lastName("Shopper")
+                .email("bob@test.com")
+                .password(passwordEncoder.encode("Password@123"))
+                .phoneNumber("1231231235")
+                .roles(new HashSet<>(Set.of(customerRole)))
+                .isEnabled(true)
+                .build());
+    }
+
+    // Helper Record for passing catalog data between phases
     private record CatalogData(
             // Values
-            AttributeValue gold, AttributeValue silver, AttributeValue platinum, AttributeValue roseGold,
-            AttributeValue diamond, AttributeValue ruby, AttributeValue emerald,
-            AttributeValue purity14k, AttributeValue purity18k, AttributeValue purity22k,
-            AttributeValue sizeSmall, AttributeValue sizeMedium, AttributeValue sizeLarge,
-            AttributeValue styleTraditional, AttributeValue styleContemporary, AttributeValue styleVintage,
+            AttributeValue gold, AttributeValue silver, AttributeValue roseGold, AttributeValue platinum,
+            AttributeValue diamond, AttributeValue ruby, AttributeValue emerald, AttributeValue sapphire,
+            AttributeValue k14, AttributeValue k18, AttributeValue k22, AttributeValue k24,
+            AttributeValue size6, AttributeValue size7, AttributeValue size8,
             // Categories
-            Category rings, Category engagementRings, Category weddingBands, Category fashionRings,
-            Category necklaces, Category pendants, Category chains,
-            Category bangles, Category traditionalBangles, Category cuffBangles,
+            Category rings, Category weddingRings, Category engagementRings,
+            Category necklaces, Category chains, Category pendants,
+            Category earrings, Category bracelets,
             // Collections
-            Collection bridal, Collection summer, Collection festival, Collection office
+            Collection bridal, Collection festival, Collection office, Collection luxury
     ) {}
 }

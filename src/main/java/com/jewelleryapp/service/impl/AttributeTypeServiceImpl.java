@@ -3,11 +3,13 @@ package com.jewelleryapp.service.impl;
 import com.jewelleryapp.dto.request.AttributeTypeRequestDto;
 import com.jewelleryapp.dto.response.AttributeTypeResponseDto;
 import com.jewelleryapp.entity.AttributeType;
+import com.jewelleryapp.exception.DuplicateResourceException;
 import com.jewelleryapp.exception.ResourceNotFoundException;
 import com.jewelleryapp.mapper.AttributeTypeMapper;
 import com.jewelleryapp.repository.AttributeTypeRepository;
 import com.jewelleryapp.service.AttributeTypeService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -24,6 +26,10 @@ public class AttributeTypeServiceImpl implements AttributeTypeService {
     @Override
     @Transactional
     public AttributeTypeResponseDto createAttributeType(AttributeTypeRequestDto requestDto) {
+        if (attributeTypeNameExists(requestDto.getName())) {
+            throw new DuplicateResourceException("Attribute Type with name '" + requestDto.getName() + "' already exists.");
+        }
+
         AttributeType attributeType = attributeTypeMapper.toEntity(requestDto);
         AttributeType savedAttributeType = attributeTypeRepository.save(attributeType);
         return attributeTypeMapper.toDto(savedAttributeType);
@@ -50,6 +56,10 @@ public class AttributeTypeServiceImpl implements AttributeTypeService {
         AttributeType existingAttributeType = attributeTypeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("AttributeType", "id", id));
 
+        if (!existingAttributeType.getName().equalsIgnoreCase(requestDto.getName()) && attributeTypeNameExists(requestDto.getName())) {
+            throw new DuplicateResourceException("Attribute Type with name '" + requestDto.getName() + "' already exists.");
+        }
+
         attributeTypeMapper.updateEntityFromDto(requestDto, existingAttributeType);
 
         AttributeType updatedAttributeType = attributeTypeRepository.save(existingAttributeType);
@@ -61,7 +71,18 @@ public class AttributeTypeServiceImpl implements AttributeTypeService {
     public void deleteAttributeType(Integer id) {
         AttributeType attributeType = attributeTypeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("AttributeType", "id", id));
-        // Deletion will cascade to AttributeValues due to `orphanRemoval = true`
+
+        // Prevent deletion if values exist (which implies products might use them)
+        if (!attributeType.getValues().isEmpty()) {
+            throw new DataIntegrityViolationException("Cannot delete Attribute Type. It has associated values (e.g., 'Gold', 'Silver'). Delete values first.");
+        }
+
         attributeTypeRepository.delete(attributeType);
+    }
+
+    private boolean attributeTypeNameExists(String name) {
+        return attributeTypeRepository.exists((root, query, cb) ->
+                cb.equal(cb.lower(root.get("name")), name.toLowerCase())
+        );
     }
 }

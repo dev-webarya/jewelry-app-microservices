@@ -7,6 +7,7 @@ import com.jewelleryapp.service.StoreService;
 import com.jewelleryapp.specification.StoreSpecification;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -20,6 +21,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class StoreController {
 
+    @Autowired
     private final StoreService storeService;
 
     @PostMapping

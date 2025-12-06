@@ -3,11 +3,13 @@ package com.jewelleryapp.service.impl;
 import com.jewelleryapp.dto.request.CategoryRequestDto;
 import com.jewelleryapp.dto.response.CategoryResponseDto;
 import com.jewelleryapp.entity.Category;
+import com.jewelleryapp.exception.DuplicateResourceException;
 import com.jewelleryapp.exception.ResourceNotFoundException;
 import com.jewelleryapp.mapper.CategoryMapper;
 import com.jewelleryapp.repository.CategoryRepository;
 import com.jewelleryapp.service.CategoryService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -24,9 +26,12 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public CategoryResponseDto createCategory(CategoryRequestDto categoryRequestDto) {
+        if (categoryNameExists(categoryRequestDto.getName())) {
+            throw new DuplicateResourceException("Category with name '" + categoryRequestDto.getName() + "' already exists.");
+        }
+
         Category category = categoryMapper.toEntity(categoryRequestDto);
 
-        // Handle setting the parent category
         if (categoryRequestDto.getParentId() != null) {
             Category parent = findCategoryById(categoryRequestDto.getParentId());
             category.setParent(parent);
@@ -56,19 +61,20 @@ public class CategoryServiceImpl implements CategoryService {
     public CategoryResponseDto updateCategory(Integer id, CategoryRequestDto categoryRequestDto) {
         Category existingCategory = findCategoryById(id);
 
-        // Update basic fields from DTO
+        if (!existingCategory.getName().equalsIgnoreCase(categoryRequestDto.getName()) && categoryNameExists(categoryRequestDto.getName())) {
+            throw new DuplicateResourceException("Category with name '" + categoryRequestDto.getName() + "' already exists.");
+        }
+
         categoryMapper.updateEntityFromDto(categoryRequestDto, existingCategory);
 
-        // Handle parent update
         if (categoryRequestDto.getParentId() != null) {
-            // Prevent setting self as parent
             if (categoryRequestDto.getParentId().equals(id)) {
                 throw new IllegalArgumentException("Category cannot be its own parent.");
             }
             Category parent = findCategoryById(categoryRequestDto.getParentId());
             existingCategory.setParent(parent);
         } else {
-            existingCategory.setParent(null); // Set as root category
+            existingCategory.setParent(null);
         }
 
         Category updatedCategory = categoryRepository.save(existingCategory);
@@ -79,15 +85,27 @@ public class CategoryServiceImpl implements CategoryService {
     @Transactional
     public void deleteCategory(Integer id) {
         Category category = findCategoryById(id);
-        // Note: DataIntegrityViolationException will be thrown by DB if products
-        // or subcategories are linked. The GlobalExceptionHandler will catch this.
-        // For a softer delete, you'd check category.getProducts().isEmpty() etc.
+
+        if (!category.getSubcategories().isEmpty()) {
+            throw new DataIntegrityViolationException("Cannot delete category. It has active subcategories. Please reassign or delete them first.");
+        }
+
+        if (!category.getProducts().isEmpty()) {
+            throw new DataIntegrityViolationException("Cannot delete category. It has products associated with it. Please reassign products first.");
+        }
+
         categoryRepository.delete(category);
     }
 
-    // Helper method to find category or throw
     private Category findCategoryById(Integer id) {
         return categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", "id", id));
+    }
+
+    private boolean categoryNameExists(String name) {
+        // Use specification to check existence efficiently
+        return categoryRepository.exists((root, query, cb) ->
+                cb.equal(cb.lower(root.get("name")), name.toLowerCase())
+        );
     }
 }

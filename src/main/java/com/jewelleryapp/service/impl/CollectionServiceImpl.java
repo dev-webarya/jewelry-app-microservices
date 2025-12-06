@@ -3,11 +3,13 @@ package com.jewelleryapp.service.impl;
 import com.jewelleryapp.dto.request.CollectionRequestDto;
 import com.jewelleryapp.dto.response.CollectionResponseDto;
 import com.jewelleryapp.entity.Collection;
+import com.jewelleryapp.exception.DuplicateResourceException;
 import com.jewelleryapp.exception.ResourceNotFoundException;
 import com.jewelleryapp.mapper.CollectionMapper;
 import com.jewelleryapp.repository.CollectionRepository;
 import com.jewelleryapp.service.CollectionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -24,6 +26,10 @@ public class CollectionServiceImpl implements CollectionService {
     @Override
     @Transactional
     public CollectionResponseDto createCollection(CollectionRequestDto requestDto) {
+        if (collectionNameExists(requestDto.getName())) {
+            throw new DuplicateResourceException("Collection with name '" + requestDto.getName() + "' already exists.");
+        }
+
         Collection collection = collectionMapper.toEntity(requestDto);
         Collection savedCollection = collectionRepository.save(collection);
         return collectionMapper.toDto(savedCollection);
@@ -50,6 +56,10 @@ public class CollectionServiceImpl implements CollectionService {
         Collection existingCollection = collectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Collection", "id", id));
 
+        if (!existingCollection.getName().equalsIgnoreCase(requestDto.getName()) && collectionNameExists(requestDto.getName())) {
+            throw new DuplicateResourceException("Collection with name '" + requestDto.getName() + "' already exists.");
+        }
+
         collectionMapper.updateEntityFromDto(requestDto, existingCollection);
 
         Collection updatedCollection = collectionRepository.save(existingCollection);
@@ -61,7 +71,17 @@ public class CollectionServiceImpl implements CollectionService {
     public void deleteCollection(Integer id) {
         Collection collection = collectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Collection", "id", id));
-        // This will fail if products are associated. Add check if needed.
+
+        if (!collection.getProducts().isEmpty()) {
+            throw new DataIntegrityViolationException("Cannot delete collection. There are products associated with it.");
+        }
+
         collectionRepository.delete(collection);
+    }
+
+    private boolean collectionNameExists(String name) {
+        return collectionRepository.exists((root, query, cb) ->
+                cb.equal(cb.lower(root.get("name")), name.toLowerCase())
+        );
     }
 }

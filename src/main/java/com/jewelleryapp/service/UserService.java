@@ -5,12 +5,17 @@ import com.jewelleryapp.dto.response.UserResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
-import java.util.UUID; // Import UUID
+import java.util.UUID;
 
 public interface UserService {
     UserResponse createUser(UserRequest userRequest);
     Page<UserResponse> getAllUsers(Pageable pageable, String searchTerm);
-    UserResponse getUserById(UUID userId); // Changed from Long
-    UserResponse updateUser(UUID userId, UserRequest userRequest); // Changed from Long
-    void deleteUser(UUID userId); // Changed from Long
+    UserResponse getUserById(UUID userId);
+    UserResponse updateUser(UUID userId, UserRequest userRequest);
+
+    // --- New Self-Management Methods ---
+    UserResponse getCurrentUser();
+    UserResponse updateCurrentUser(UserRequest userRequest);
+
+    void deleteUser(UUID userId);
 }

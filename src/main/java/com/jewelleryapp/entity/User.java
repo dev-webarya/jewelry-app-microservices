@@ -17,8 +17,8 @@ import java.util.stream.Collectors;
 
 @Getter
 @Setter
-@ToString(exclude = "roles")
-@EqualsAndHashCode(exclude = "roles")
+@ToString(exclude = {"roles", "managedStore"}) // Exclude store to prevent loops
+@EqualsAndHashCode(exclude = {"roles", "managedStore"})
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -40,7 +40,7 @@ public class User implements UserDetails {
     private String email;
 
     @Column(nullable = false)
-    private String password; // This stores the passwordHash
+    private String password;
 
     @Column(unique = true)
     private String phoneNumber;
@@ -48,6 +48,13 @@ public class User implements UserDetails {
     @Column(nullable = false)
     @Builder.Default
     private boolean isEnabled = false;
+
+    // --- New Relationship: Store Assignment ---
+    // A user (Manager) belongs to one Store.
+    // Admins and Customers usually have this as null.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_store_id")
+    private Store managedStore;
 
     @CreationTimestamp
     @Column(updatable = false)
@@ -74,7 +81,7 @@ public class User implements UserDetails {
 
     @Override
     public String getUsername() {
-        return email; // Use email as the username
+        return email;
     }
 
     @Override

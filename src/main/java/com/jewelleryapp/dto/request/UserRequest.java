@@ -1,6 +1,5 @@
 package com.jewelleryapp.dto.request;
 
-// Removed: import com.jewelleryapp.model.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -8,6 +7,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.util.Set;
+import java.util.UUID;
 
 @Data
 public class UserRequest {
@@ -22,15 +22,14 @@ public class UserRequest {
     private String email;
 
     @Pattern(regexp = "^\\d{10}$", message = "Phone number must be 10 digits")
-    private String phoneNumber; // Added
+    private String phoneNumber;
 
     @Size(min = 6, message = "Password must be at least 6 characters long")
-    @Pattern(
-            regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z\\d]).+$",
-            message = "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
-    )
-    // Password is not @NotBlank, allowing for updates without changing it
+    // Password optional for updates
     private String password;
 
-    private Set<String> roles; // Changed from Role role to Set<String>
+    private Set<String> roles;
+
+    // New field to assign a manager to a store
+    private UUID assignedStoreId;
 }

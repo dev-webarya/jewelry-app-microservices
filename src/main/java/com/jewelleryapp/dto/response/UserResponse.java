@@ -1,6 +1,5 @@
 package com.jewelleryapp.dto.response;
 
-// Removed: import com.jewelleryapp.model.Role;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,9 +13,14 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserResponse {
-    private UUID id; // Changed from Long to UUID
+    private UUID id;
     private String firstName;
     private String lastName;
-    private String email; // Renamed from username
-    private Set<String> roles; // Changed from Role to Set<String>
+    private String email;
+    private String phoneNumber;
+    private Set<String> roles;
+
+    // New fields for Store info
+    private UUID assignedStoreId;
+    private String assignedStoreName;
 }

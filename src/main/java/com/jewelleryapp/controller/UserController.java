@@ -12,25 +12,40 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID; // Import UUID
+import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/users") // Kept general path
+@RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
-@PreAuthorize("hasAuthority('ADMIN')") // Secure the entire controller for ADMINs
 public class UserController {
 
     private final UserService userService;
 
-    // Note: Creating a user is handled by AuthController.register
-    // This endpoint is for ADMINS to create other users (e.g., other ADMINs)
+    // --- NEW: Get Current User Profile ---
+    // Accessible by anyone logged in (Customer, Manager, Admin)
+    @GetMapping("/me")
+    public ResponseEntity<UserResponse> getCurrentUser() {
+        return ResponseEntity.ok(userService.getCurrentUser());
+    }
+
+    // --- NEW: Authenticated User Self-Update ---
+    // Accessible by anyone logged in (Customer, Manager, Admin)
+    @PutMapping("/me")
+    public ResponseEntity<UserResponse> updateCurrentUser(@Valid @RequestBody UserRequest request) {
+        return ResponseEntity.ok(userService.updateCurrentUser(request));
+    }
+    // -------------------------------------------
+
+    // Admin/Manager creating other users
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STORE_MANAGER')")
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody UserRequest request) {
         UserResponse createdUser = userService.createUser(request);
         return new ResponseEntity<>(createdUser, HttpStatus.CREATED);
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STORE_MANAGER')")
     public ResponseEntity<Page<UserResponse>> getAllUsers(
             @RequestParam(required = false) String search,
             Pageable pageable) {
@@ -38,17 +53,20 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<UserResponse> getUserById(@PathVariable("id") UUID userId) { // Changed from Long
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STORE_MANAGER')")
+    public ResponseEntity<UserResponse> getUserById(@PathVariable("id") UUID userId) {
         return ResponseEntity.ok(userService.getUserById(userId));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<UserResponse> updateUser(@PathVariable("id") UUID userId, @Valid @RequestBody UserRequest request) { // Changed from Long
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_STORE_MANAGER')")
+    public ResponseEntity<UserResponse> updateUser(@PathVariable("id") UUID userId, @Valid @RequestBody UserRequest request) {
         return ResponseEntity.ok(userService.updateUser(userId, request));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteUser(@PathVariable("id") UUID userId) { // Changed from Long
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<Void> deleteUser(@PathVariable("id") UUID userId) {
         userService.deleteUser(userId);
         return ResponseEntity.noContent().build();
     }

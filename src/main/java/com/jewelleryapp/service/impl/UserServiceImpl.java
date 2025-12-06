@@ -3,12 +3,14 @@ package com.jewelleryapp.service.impl;
 import com.jewelleryapp.dto.request.UserRequest;
 import com.jewelleryapp.dto.response.UserResponse;
 import com.jewelleryapp.entity.Role;
+import com.jewelleryapp.entity.Store;
 import com.jewelleryapp.entity.User;
 import com.jewelleryapp.exception.DuplicateResourceException;
 import com.jewelleryapp.exception.InvalidRequestException;
 import com.jewelleryapp.exception.ResourceNotFoundException;
 import com.jewelleryapp.mapper.UserMapper;
 import com.jewelleryapp.repository.RoleRepository;
+import com.jewelleryapp.repository.StoreRepository;
 import com.jewelleryapp.repository.UserRepository;
 import com.jewelleryapp.service.UserService;
 import com.jewelleryapp.specification.UserSpecification;
@@ -16,11 +18,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -30,7 +34,8 @@ import java.util.stream.Collectors;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository; // Injected
+    private final RoleRepository roleRepository;
+    private final StoreRepository storeRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final UserSpecification userSpecification;
@@ -38,30 +43,51 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserResponse createUser(UserRequest userRequest) {
-        if (userRepository.existsByEmail(userRequest.getEmail())) { // Changed
+        // 1. Identity Check
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+        // 2. Uniqueness Checks
+        if (userRepository.existsByEmail(userRequest.getEmail())) {
             throw new DuplicateResourceException("User with email '" + userRequest.getEmail() + "' already exists.");
         }
         if (userRequest.getPhoneNumber() != null && userRepository.findByPhoneNumber(userRequest.getPhoneNumber()).isPresent()) {
-            throw new DuplicateResourceException("User with phone number '" + userRequest.getPhoneNumber() + "' already exists.");
+            throw new DuplicateResourceException("User with phone '" + userRequest.getPhoneNumber() + "' already exists.");
         }
 
         User user = userMapper.toEntity(userRequest);
         user.setPassword(passwordEncoder.encode(userRequest.getPassword()));
-        user.setPhoneNumber(userRequest.getPhoneNumber()); // Set phone number
+        user.setPhoneNumber(userRequest.getPhoneNumber());
 
-        // Admins creating users can set roles
+        // 3. Role Assignment Logic
         if (userRequest.getRoles() == null || userRequest.getRoles().isEmpty()) {
-            user.getRoles().add(findRoleByName("ROLE_CUSTOMER")); // Default role
+            user.getRoles().add(findRoleByName("ROLE_CUSTOMER"));
         } else {
+            // Restriction: Only Admin can assign Admin/Manager roles
+            boolean tryingToAssignPrivileged = userRequest.getRoles().stream()
+                    .anyMatch(r -> r.contains("ADMIN") || r.contains("MANAGER"));
+
+            if (tryingToAssignPrivileged && !isAdmin) {
+                throw new AccessDeniedException("Only Admins can create Store Managers or other Admins.");
+            }
+
             Set<Role> roles = userRequest.getRoles().stream()
                     .map(this::findRoleByName)
                     .collect(Collectors.toSet());
             user.setRoles(roles);
         }
 
-        // Admin-created users are enabled by default
-        user.setEnabled(true);
+        // 4. Store Assignment Logic (Admin Only)
+        if (userRequest.getAssignedStoreId() != null) {
+            if (!isAdmin) {
+                throw new AccessDeniedException("Only Admins can assign users to stores.");
+            }
+            Store store = storeRepository.findById(userRequest.getAssignedStoreId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Store", "id", userRequest.getAssignedStoreId()));
+            user.setManagedStore(store);
+        }
 
+        user.setEnabled(true); // Manually created users are auto-enabled
         User savedUser = userRepository.save(user);
         return userMapper.toResponse(savedUser);
     }
@@ -70,75 +96,118 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserResponse> getAllUsers(Pageable pageable, String searchTerm) {
         Specification<User> spec = userSpecification.searchByTerm(searchTerm);
-        Page<User> userPage = userRepository.findAll(spec, pageable);
-        return userPage.map(userMapper::toResponse);
+        return userRepository.findAll(spec, pageable).map(userMapper::toResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public UserResponse getUserById(UUID userId) { // Changed from Long
+    public UserResponse getUserById(UUID userId) {
         User user = findUserById(userId);
         return userMapper.toResponse(user);
     }
 
     @Override
     @Transactional
-    public UserResponse updateUser(UUID userId, UserRequest userRequest) { // Changed from Long
+    public UserResponse updateUser(UUID userId, UserRequest userRequest) {
         User existingUser = findUserById(userId);
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
 
-        // Check email uniqueness if changed
+        // Validation: Unique Email/Phone
         if (userRequest.getEmail() != null && !userRequest.getEmail().equals(existingUser.getEmail())) {
-            userRepository.findByEmail(userRequest.getEmail()).ifPresent(u -> {
-                throw new DuplicateResourceException("Another user with email '" + userRequest.getEmail() + "' already exists.");
-            });
-            existingUser.setEmail(userRequest.getEmail()); // Update email
+            if (userRepository.existsByEmail(userRequest.getEmail())) throw new DuplicateResourceException("Email exists");
+            existingUser.setEmail(userRequest.getEmail());
         }
 
-        // Check phone number uniqueness if changed
-        if (userRequest.getPhoneNumber() != null && !userRequest.getPhoneNumber().equals(existingUser.getPhoneNumber())) {
-            userRepository.findByPhoneNumber(userRequest.getPhoneNumber()).ifPresent(u -> {
-                throw new DuplicateResourceException("Another user with phone number '" + userRequest.getPhoneNumber() + "' already exists.");
-            });
-            existingUser.setPhoneNumber(userRequest.getPhoneNumber()); // Update phone
-        }
-
-        // Update basic fields
         userMapper.updateEntityFromRequest(userRequest, existingUser);
 
-        // Update password if provided
+        // Update Password
         if (userRequest.getPassword() != null && !userRequest.getPassword().isBlank()) {
             existingUser.setPassword(passwordEncoder.encode(userRequest.getPassword()));
         }
 
-        // Update roles if provided
-        if (userRequest.getRoles() != null) {
+        // Update Roles (Admin Only)
+        if (userRequest.getRoles() != null && isAdmin) {
             Set<Role> roles = userRequest.getRoles().stream()
                     .map(this::findRoleByName)
                     .collect(Collectors.toSet());
             existingUser.setRoles(roles);
         }
 
-        User updatedUser = userRepository.save(existingUser);
-        return userMapper.toResponse(updatedUser);
+        // Update Store Assignment (Admin Only)
+        if (userRequest.getAssignedStoreId() != null) {
+            if (!isAdmin) throw new AccessDeniedException("Only Admins can change store assignments.");
+            Store store = storeRepository.findById(userRequest.getAssignedStoreId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Store", "id", userRequest.getAssignedStoreId()));
+            existingUser.setManagedStore(store);
+        }
+
+        return userMapper.toResponse(userRepository.save(existingUser));
+    }
+
+    // --- NEW: Get Logged-in User Profile ---
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponse getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String currentUserEmail = auth.getName();
+        User currentUser = userRepository.findByEmail(currentUserEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+        return userMapper.toResponse(currentUser);
+    }
+
+    // --- NEW: Update Logged-in User Profile ---
+    @Override
+    @Transactional
+    public UserResponse updateCurrentUser(UserRequest userRequest) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String currentUserEmail = auth.getName();
+        User currentUser = userRepository.findByEmail(currentUserEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+
+        // Safe Updates (Name, Phone, Password)
+        if (userRequest.getFirstName() != null && !userRequest.getFirstName().isBlank()) {
+            currentUser.setFirstName(userRequest.getFirstName());
+        }
+
+        if (userRequest.getLastName() != null && !userRequest.getLastName().isBlank()) {
+            currentUser.setLastName(userRequest.getLastName());
+        }
+
+        // Phone Update with Uniqueness Check
+        if (userRequest.getPhoneNumber() != null && !userRequest.getPhoneNumber().equals(currentUser.getPhoneNumber())) {
+            userRepository.findByPhoneNumber(userRequest.getPhoneNumber()).ifPresent(u -> {
+                throw new DuplicateResourceException("Phone number '" + userRequest.getPhoneNumber() + "' already exists.");
+            });
+            currentUser.setPhoneNumber(userRequest.getPhoneNumber());
+        }
+
+        // Password Update
+        if (userRequest.getPassword() != null && !userRequest.getPassword().isBlank()) {
+            currentUser.setPassword(passwordEncoder.encode(userRequest.getPassword()));
+        }
+
+        // Roles and Store Assignments are deliberately IGNORED here for security.
+
+        return userMapper.toResponse(userRepository.save(currentUser));
     }
 
     @Override
     @Transactional
-    public void deleteUser(UUID userId) { // Changed from Long
+    public void deleteUser(UUID userId) {
         if (!userRepository.existsById(userId)) {
             throw new ResourceNotFoundException("User not found with id: " + userId);
         }
         userRepository.deleteById(userId);
     }
 
-    private User findUserById(UUID userId) { // Changed from Long
+    private User findUserById(UUID userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
     }
 
-    // Helper to find roles
     private Role findRoleByName(String roleName) {
         return roleRepository.findByName(roleName)
-                .orElseThrow(() -> new InvalidRequestException("Role not found: " + roleName + ". Please ensure roles (e.g., ROLE_CUSTOMER, ROLE_ADMIN) exist in the database."));
+                .orElseThrow(() -> new InvalidRequestException("Role not found: " + roleName));
     }
 }

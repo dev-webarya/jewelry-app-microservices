@@ -6,6 +6,7 @@ import com.jewelleryapp.entity.AttributeValue;
 import com.jewelleryapp.entity.Category;
 import com.jewelleryapp.entity.Collection;
 import com.jewelleryapp.entity.Product;
+import com.jewelleryapp.exception.DuplicateResourceException;
 import com.jewelleryapp.exception.ResourceNotFoundException;
 import com.jewelleryapp.mapper.ProductMapper;
 import com.jewelleryapp.repository.AttributeValueRepository;
@@ -23,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,9 +38,11 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductResponseDto createProduct(ProductRequestDto requestDto) {
-        Product product = productMapper.toEntity(requestDto);
+        if (skuExists(requestDto.getSku())) {
+            throw new DuplicateResourceException("Product with SKU '" + requestDto.getSku() + "' already exists.");
+        }
 
-        // Handle relationships
+        Product product = productMapper.toEntity(requestDto);
         updateProductRelationships(product, requestDto);
 
         Product savedProduct = productRepository.save(product);
@@ -50,9 +52,6 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public Page<ProductResponseDto> getAllProducts(Specification<Product> spec, Pageable pageable) {
-        // Here we fetch Products, which triggers fetches for related entities
-        // This can be N+1. For production, @EntityGraph or fetch joins in the
-        // specification are recommended.
         return productRepository.findAll(spec, pageable)
                 .map(productMapper::toDto);
     }
@@ -60,7 +59,6 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public ProductResponseDto getProductById(UUID id) {
-        // Fetching a single product is usually fine.
         return productRepository.findById(id)
                 .map(productMapper::toDto)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
@@ -72,10 +70,11 @@ public class ProductServiceImpl implements ProductService {
         Product existingProduct = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
 
-        // Update basic fields
-        productMapper.updateEntityFromDto(requestDto, existingProduct);
+        if (!existingProduct.getSku().equalsIgnoreCase(requestDto.getSku()) && skuExists(requestDto.getSku())) {
+            throw new DuplicateResourceException("Product with SKU '" + requestDto.getSku() + "' already exists.");
+        }
 
-        // Update relationships
+        productMapper.updateEntityFromDto(requestDto, existingProduct);
         updateProductRelationships(existingProduct, requestDto);
 
         Product updatedProduct = productRepository.save(existingProduct);
@@ -87,15 +86,12 @@ public class ProductServiceImpl implements ProductService {
     public void deleteProduct(UUID id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
-        // This will cascade to ProductImages and StockItems
+        // Note: Cascade deletes on images and stock items are usually desired behavior for Products.
+        // If you want to prevent deleting products with stock, you'd add a check here against StockItemRepository.
         productRepository.delete(product);
     }
 
-    /**
-     * Helper method to update the relationships of a Product entity based on a DTO.
-     */
     private void updateProductRelationships(Product product, ProductRequestDto dto) {
-        // 1. Set Category
         if (dto.getCategoryId() != null) {
             Category category = categoryRepository.findById(dto.getCategoryId())
                     .orElseThrow(() -> new ResourceNotFoundException("Category", "id", dto.getCategoryId()));
@@ -104,7 +100,6 @@ public class ProductServiceImpl implements ProductService {
             product.setCategory(null);
         }
 
-        // 2. Set Collections
         product.getCollections().clear();
         if (dto.getCollectionIds() != null && !dto.getCollectionIds().isEmpty()) {
             Set<Collection> collections = new HashSet<>(collectionRepository.findAllById(dto.getCollectionIds()));
@@ -114,7 +109,6 @@ public class ProductServiceImpl implements ProductService {
             product.setCollections(collections);
         }
 
-        // 3. Set Attributes
         product.getAttributes().clear();
         if (dto.getAttributeValueIds() != null && !dto.getAttributeValueIds().isEmpty()) {
             Set<AttributeValue> attributes = new HashSet<>(attributeValueRepository.findAllById(dto.getAttributeValueIds()));
@@ -123,5 +117,11 @@ public class ProductServiceImpl implements ProductService {
             }
             product.setAttributes(attributes);
         }
+    }
+
+    private boolean skuExists(String sku) {
+        return productRepository.exists((root, query, cb) ->
+                cb.equal(cb.lower(root.get("sku")), sku.toLowerCase())
+        );
     }
 }
