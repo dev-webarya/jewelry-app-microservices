@@ -48,8 +48,12 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers(SWAGGER_WHITELIST).permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/reviews/**").permitAll()
 
-                        // 2. Public Read Access (Catalog Browsing for Customers)
+                        // 2. Payment Webhooks (Must be public as they come from External Gateways like Razorpay)
+                        .requestMatchers("/api/v1/payments/webhook/**").permitAll()
+
+                        // 3. Public Read Access (Catalog Browsing for Customers)
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/products/**",
                                 "/api/v1/product-images/**",
@@ -60,26 +64,28 @@ public class SecurityConfig {
                                 "/api/v1/stores/**"
                         ).permitAll()
 
-                        // 3. User Self-Management (Must be before general user rules)
+                        // 4. User Self-Management (Must be before general user rules)
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/v1/users/me").authenticated()
 
-                        // 4. ADMIN ONLY: Store & Manager Assignment
+                        // 5. ADMIN ONLY: Store & Manager Assignment
                         .requestMatchers(HttpMethod.POST, "/api/v1/stores/**").hasAuthority("ROLE_ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/stores/**").hasAuthority("ROLE_ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/stores/**").hasAuthority("ROLE_ADMIN")
 
-                        // 5. ADMIN & STORE MANAGER: Product Management
+                        // 6. ADMIN & STORE MANAGER: Product Management
                         .requestMatchers(HttpMethod.POST, "/api/v1/products/**", "/api/v1/product-images/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_STORE_MANAGER")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/products/**", "/api/v1/product-images/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_STORE_MANAGER")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/products/**").hasAuthority("ROLE_ADMIN") // Delete is Admin only safety
 
-                        // 6. ADMIN & STORE MANAGER: Stock/Inventory (Service layer enforces specific store ownership)
+                        // 7. ADMIN & STORE MANAGER: Stock/Inventory (Service layer enforces specific store ownership)
                         .requestMatchers("/api/v1/stock-items/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_STORE_MANAGER")
 
-                        // 7. User Management (Restricted)
+                        // 8. User Management (Restricted)
                         .requestMatchers("/api/v1/users/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_STORE_MANAGER")
 
+                        // Note: Shipments, Orders, and Payment Initiation fall here.
+                        // They are secured by .authenticated() and @PreAuthorize annotations in their controllers.
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
