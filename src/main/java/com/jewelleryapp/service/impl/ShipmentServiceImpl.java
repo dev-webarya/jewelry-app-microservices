@@ -11,6 +11,7 @@ import com.jewelleryapp.exception.ResourceNotFoundException;
 import com.jewelleryapp.mapper.ShipmentMapper;
 import com.jewelleryapp.repository.OrderRepository;
 import com.jewelleryapp.repository.ShipmentRepository;
+import com.jewelleryapp.service.notification.JewelleryNotificationService;
 import com.jewelleryapp.service.OrderService;
 import com.jewelleryapp.service.ShipmentService;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,18 +32,19 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final ShipmentMapper shipmentMapper;
     private final OrderService orderService;
 
+    // --- INTEGRATION: Notification Service ---
+    private final JewelleryNotificationService notificationService;
+
     @Override
     @Transactional
     public ShipmentResponseDto createShipment(ShipmentRequestDto request) {
         CustomerOrder order = orderRepository.findById(request.getOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "id", request.getOrderId()));
 
-        // Validation: Can only ship PROCESSING orders
         if (order.getStatus() != OrderStatus.PROCESSING) {
             throw new InvalidRequestException("Order cannot be shipped. Current status: " + order.getStatus());
         }
 
-        // Mock Tracking Number Generation if not provided
         String trackingNum = (request.getTrackingNumber() != null)
                 ? request.getTrackingNumber()
                 : "TRK" + System.currentTimeMillis();
@@ -57,11 +58,12 @@ public class ShipmentServiceImpl implements ShipmentService {
 
         Shipment savedShipment = shipmentRepository.save(shipment);
 
-        // Update Order Status
         orderService.updateOrderStatus(order.getId(), OrderStatus.SHIPPED,
                 "Shipped via " + request.getCarrier() + ". Tracking: " + trackingNum);
 
-        log.info("Shipment created for Order {}. Tracking: {}", order.getOrderNumber(), trackingNum);
+        // --- NOTIFICATION: Order Shipped ---
+        notificationService.sendOrderShipped(order, trackingNum, request.getCarrier());
+
         return shipmentMapper.toDto(savedShipment);
     }
 
@@ -74,7 +76,6 @@ public class ShipmentServiceImpl implements ShipmentService {
         shipment.setStatus(newStatus);
 
         if (newStatus == ShipmentStatus.DELIVERED) {
-            // Auto-complete the order lifecycle
             orderService.updateOrderStatus(shipment.getOrder().getId(), OrderStatus.DELIVERED, "Package marked delivered by carrier.");
         }
 

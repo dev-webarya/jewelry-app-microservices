@@ -9,10 +9,12 @@ import com.jewelleryapp.exception.InvalidRequestException;
 import com.jewelleryapp.exception.ResourceNotFoundException;
 import com.jewelleryapp.mapper.OrderMapper;
 import com.jewelleryapp.repository.*;
+import com.jewelleryapp.service.notification.JewelleryNotificationService;
 import com.jewelleryapp.service.OrderService;
 import com.jewelleryapp.specification.OrderSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -37,13 +39,15 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final StockItemRepository stockItemRepository;
     private final StoreRepository storeRepository;
-    private final CartRepository cartRepository; // Inject Cart Repo
+    private final CartRepository cartRepository;
     private final OrderMapper orderMapper;
+
+    // --- INTEGRATION: Notification Service ---
+    private final JewelleryNotificationService notificationService;
 
     @Override
     @Transactional
     public OrderResponseDto createOrder(OrderRequestDto request) {
-        // Standard flow: User provides the list of items explicitly
         return processOrderCreation(
                 request.getItems(),
                 request.getFulfillmentStoreId(),
@@ -56,8 +60,6 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public OrderResponseDto checkoutCart(CartCheckoutRequestDto request) {
         User user = getCurrentUserEntity();
-
-        // 1. Fetch Cart
         ShoppingCart cart = cartRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Cart not found for user."));
 
@@ -65,7 +67,6 @@ public class OrderServiceImpl implements OrderService {
             throw new InvalidRequestException("Cannot checkout an empty cart.");
         }
 
-        // 2. Map Cart Items to Order Request Format
         List<OrderRequestDto.OrderItemRequestDto> orderItems = cart.getItems().stream()
                 .map(cartItem -> {
                     OrderRequestDto.OrderItemRequestDto itemDto = new OrderRequestDto.OrderItemRequestDto();
@@ -75,7 +76,6 @@ public class OrderServiceImpl implements OrderService {
                 })
                 .collect(Collectors.toList());
 
-        // 3. Create Order
         OrderResponseDto response = processOrderCreation(
                 orderItems,
                 request.getFulfillmentStoreId(),
@@ -83,15 +83,11 @@ public class OrderServiceImpl implements OrderService {
                 request.getBillingAddress()
         );
 
-        // 4. Clear Cart (Atomic operation: only happens if order creation succeeds)
         cart.getItems().clear();
         cartRepository.save(cart);
-        log.info("Cart cleared for user {} after successful checkout.", user.getEmail());
-
         return response;
     }
 
-    // --- Core Logic Refactored to be Reusable ---
     private OrderResponseDto processOrderCreation(List<OrderRequestDto.OrderItemRequestDto> items, UUID fulfillmentStoreId, String shippingAddress, String billingAddress) {
         User user = getCurrentUserEntity();
 
@@ -106,7 +102,6 @@ public class OrderServiceImpl implements OrderService {
                 .totalPrice(BigDecimal.ZERO)
                 .build();
 
-        // Determine Fulfillment
         Store fulfillmentStore;
         if (fulfillmentStoreId != null) {
             fulfillmentStore = storeRepository.findById(fulfillmentStoreId)
@@ -142,51 +137,112 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.setTotalPrice(total);
+        addStatusHistory(order, null, OrderStatus.PAYMENT_PENDING, "Order Created");
 
-        String sourceName = (fulfillmentStore == null) ? "Central Warehouse" : fulfillmentStore.getName();
-        String typeName = (fulfillmentStoreId != null) ? "Pickup" : "Delivery";
-
-        addStatusHistory(order, null, OrderStatus.PAYMENT_PENDING,
-                "Order Created. Method: " + typeName + ", Source: " + sourceName);
-
-        return orderMapper.toDto(orderRepository.save(order));
+        // FIX: Use saveAndFlush so timestamps (createdAt) are populated immediately for the response
+        CustomerOrder savedOrder = orderRepository.saveAndFlush(order);
+        return orderMapper.toDto(savedOrder);
     }
 
-    // --- Helper Methods (Same as before) ---
+    @Override
+    @Transactional
+    public OrderResponseDto confirmOrderPayment(UUID orderId, String paymentMethod) {
+        CustomerOrder order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
 
-    private Store findBestFulfillmentSource(List<OrderRequestDto.OrderItemRequestDto> items) {
-        if (canFulfillOrder(items, null)) {
-            log.info("Routing to Central Warehouse");
-            return null;
+        if (order.getStatus() != OrderStatus.PAYMENT_PENDING) {
+            // If already processing/shipped, strictly return current state to avoid errors
+            if (order.getStatus() == OrderStatus.PROCESSING || order.getStatus() == OrderStatus.SHIPPED || order.getStatus() == OrderStatus.DELIVERED) {
+                return orderMapper.toDto(order);
+            }
+            throw new InvalidRequestException("Order is not in a valid state to receive payment.");
         }
-        List<Store> allStores = storeRepository.findAll();
-        for (Store store : allStores) {
-            if (canFulfillOrder(items, store.getId())) {
-                log.info("Routing to Store: {}", store.getName());
-                return store;
+
+        return processStatusUpdate(order, OrderStatus.PROCESSING, "Payment Verified via " + paymentMethod);
+    }
+
+    @Override
+    @Transactional
+    public OrderResponseDto updateOrderStatus(UUID orderId, OrderStatus newStatus, String notes) {
+        CustomerOrder order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+
+        User currentUser = getCurrentUserEntity();
+        boolean isManager = currentUser.getRoles().stream().anyMatch(r -> r.getName().equals("ROLE_STORE_MANAGER"));
+        boolean isAdmin = currentUser.getRoles().stream().anyMatch(r -> r.getName().equals("ROLE_ADMIN"));
+
+        if (!isManager && !isAdmin) {
+            throw new AccessDeniedException("Insufficient permissions to update order status.");
+        }
+
+        if (isManager) {
+            if (order.getFulfillmentStore() == null ||
+                    !order.getFulfillmentStore().getId().equals(currentUser.getManagedStore().getId())) {
+                throw new AccessDeniedException("You can only manage orders for your assigned store.");
             }
         }
-        throw new InvalidRequestException("One or more items are out of stock and cannot be fulfilled from any location.");
+
+        return processStatusUpdate(order, newStatus, notes);
     }
 
-    private boolean canFulfillOrder(List<OrderRequestDto.OrderItemRequestDto> items, UUID storeId) {
-        for (OrderRequestDto.OrderItemRequestDto item : items) {
-            Optional<StockItem> stock;
+    private OrderResponseDto processStatusUpdate(CustomerOrder order, OrderStatus newStatus, String notes) {
+        OrderStatus oldStatus = order.getStatus();
+        if (oldStatus == newStatus) return orderMapper.toDto(order);
+
+        try {
+            if (newStatus == OrderStatus.PROCESSING && oldStatus == OrderStatus.PAYMENT_PENDING) {
+                deductStockForOrder(order);
+                notificationService.sendOrderConfirmation(order);
+            }
+
+            boolean wasStockDeducted = (oldStatus == OrderStatus.PROCESSING || oldStatus == OrderStatus.SHIPPED || oldStatus == OrderStatus.DELIVERED);
+            if ((newStatus == OrderStatus.CANCELLED || newStatus == OrderStatus.RETURNED) && wasStockDeducted) {
+                restoreStockForOrder(order);
+                if (newStatus == OrderStatus.CANCELLED) {
+                    notificationService.sendOrderCancelled(order, notes != null ? notes : "Cancelled by System");
+                }
+            }
+        } catch (OptimisticLockingFailureException e) {
+            throw new InvalidRequestException("Inventory was updated by another user simultaneously. Please refresh and try again.");
+        }
+
+        order.setStatus(newStatus);
+        addStatusHistory(order, oldStatus, newStatus, notes);
+
+        // FIX: Use saveAndFlush for immediate timestamp updates
+        return orderMapper.toDto(orderRepository.saveAndFlush(order));
+    }
+
+    private void deductStockForOrder(CustomerOrder order) {
+        updateStock(order, -1);
+    }
+
+    private void restoreStockForOrder(CustomerOrder order) {
+        updateStock(order, 1);
+    }
+
+    private void updateStock(CustomerOrder order, int multiplier) {
+        UUID storeId = (order.getFulfillmentStore() != null) ? order.getFulfillmentStore().getId() : null;
+        String locationName = (storeId == null) ? "Central Warehouse" : order.getFulfillmentStore().getName();
+
+        for (OrderItem item : order.getItems()) {
+            StockItem stockItem;
             if (storeId == null) {
-                stock = stockItemRepository.findByProductIdAndStoreIdIsNull(item.getProductId());
+                stockItem = stockItemRepository.findByProductIdAndStoreIdIsNull(item.getProduct().getId())
+                        .orElseThrow(() -> new InvalidRequestException("Stock record missing in " + locationName));
             } else {
-                stock = stockItemRepository.findByProductIdAndStoreId(item.getProductId(), storeId);
+                stockItem = stockItemRepository.findByProductIdAndStoreId(item.getProduct().getId(), storeId)
+                        .orElseThrow(() -> new InvalidRequestException("Stock record missing in " + locationName));
             }
-            if (stock.isEmpty() || stock.get().getQuantity() < item.getQuantity()) {
-                return false;
-            }
-        }
-        return true;
-    }
 
-    private void validateStockForPickup(List<OrderRequestDto.OrderItemRequestDto> items, Store store) {
-        if (!canFulfillOrder(items, store.getId())) {
-            throw new InvalidRequestException("Selected store does not have enough stock for all items.");
+            int change = item.getQuantity() * multiplier;
+
+            if (change < 0 && stockItem.getQuantity() < Math.abs(change)) {
+                throw new InvalidRequestException("Insufficient stock in " + locationName + " for product " + item.getProduct().getSku());
+            }
+
+            stockItem.setQuantity(stockItem.getQuantity() + change);
+            stockItemRepository.save(stockItem);
         }
     }
 
@@ -241,56 +297,33 @@ public class OrderServiceImpl implements OrderService {
         return orderMapper.toDto(order);
     }
 
-    @Override
-    @Transactional
-    public OrderResponseDto updateOrderStatus(UUID orderId, OrderStatus newStatus, String notes) {
-        CustomerOrder order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
-
-        User currentUser = getCurrentUserEntity();
-        boolean isManager = currentUser.getRoles().stream().anyMatch(r -> r.getName().equals("ROLE_STORE_MANAGER"));
-
-        if (isManager) {
-            if (order.getFulfillmentStore() == null ||
-                    !order.getFulfillmentStore().getId().equals(currentUser.getManagedStore().getId())) {
-                throw new AccessDeniedException("You can only manage orders for your assigned store.");
-            }
+    private Store findBestFulfillmentSource(List<OrderRequestDto.OrderItemRequestDto> items) {
+        if (canFulfillOrder(items, null)) return null;
+        List<Store> allStores = storeRepository.findAll();
+        for (Store store : allStores) {
+            if (canFulfillOrder(items, store.getId())) return store;
         }
-
-        OrderStatus oldStatus = order.getStatus();
-        if (oldStatus == newStatus) return orderMapper.toDto(order);
-
-        if (newStatus == OrderStatus.PROCESSING && oldStatus == OrderStatus.PAYMENT_PENDING) {
-            deductStockForOrder(order);
-        }
-
-        order.setStatus(newStatus);
-        addStatusHistory(order, oldStatus, newStatus, notes);
-
-        return orderMapper.toDto(orderRepository.save(order));
+        throw new InvalidRequestException("One or more items are out of stock.");
     }
 
-    private void deductStockForOrder(CustomerOrder order) {
-        UUID storeId = (order.getFulfillmentStore() != null) ? order.getFulfillmentStore().getId() : null;
-        String locationName = (storeId == null) ? "Central Warehouse" : order.getFulfillmentStore().getName();
-
-        for (OrderItem item : order.getItems()) {
-            StockItem stockItem;
+    private boolean canFulfillOrder(List<OrderRequestDto.OrderItemRequestDto> items, UUID storeId) {
+        for (OrderRequestDto.OrderItemRequestDto item : items) {
+            Optional<StockItem> stock;
             if (storeId == null) {
-                stockItem = stockItemRepository.findByProductIdAndStoreIdIsNull(item.getProduct().getId())
-                        .orElseThrow(() -> new InvalidRequestException("Stock record missing in " + locationName));
+                stock = stockItemRepository.findByProductIdAndStoreIdIsNull(item.getProductId());
             } else {
-                stockItem = stockItemRepository.findByProductIdAndStoreId(item.getProduct().getId(), storeId)
-                        .orElseThrow(() -> new InvalidRequestException("Stock record missing in " + locationName));
+                stock = stockItemRepository.findByProductIdAndStoreId(item.getProductId(), storeId);
             }
-
-            if (stockItem.getQuantity() < item.getQuantity()) {
-                throw new InvalidRequestException("Insufficient stock in " + locationName + ". Cannot process order.");
+            if (stock.isEmpty() || stock.get().getQuantity() < item.getQuantity()) {
+                return false;
             }
+        }
+        return true;
+    }
 
-            stockItem.setQuantity(stockItem.getQuantity() - item.getQuantity());
-            stockItemRepository.save(stockItem);
-            log.info("Stock deducted from {} for product {}", locationName, item.getProduct().getSku());
+    private void validateStockForPickup(List<OrderRequestDto.OrderItemRequestDto> items, Store store) {
+        if (!canFulfillOrder(items, store.getId())) {
+            throw new InvalidRequestException("Selected store does not have enough stock.");
         }
     }
 

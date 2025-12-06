@@ -43,14 +43,6 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         // --- 1. MOCK RAZORPAY ORDER CREATION ---
-        // TODO: INTEGRATION POINT - Replace this block with actual Razorpay SDK call
-        // RazorpayClient razorpay = new RazorpayClient("key", "secret");
-        // JSONObject orderRequest = new JSONObject();
-        // orderRequest.put("amount", request.getAmount().multiply(new BigDecimal("100"))); // Paise
-        // orderRequest.put("currency", "INR");
-        // Order razorpayOrder = razorpay.orders.create(orderRequest);
-        // String transactionId = razorpayOrder.get("id");
-
         String transactionId = "pay_" + UUID.randomUUID().toString().substring(0, 8); // Mock ID
         log.info("Mocking Razorpay Order Creation. Transaction ID: {}", transactionId);
         // ----------------------------------------
@@ -66,7 +58,6 @@ public class PaymentServiceImpl implements PaymentService {
         Payment savedPayment = paymentRepository.save(payment);
 
         // For simulation purposes, we will auto-verify this payment immediately
-        // In reality, the Frontend calls verifyPayment() after user completes checkout
         return verifyPayment(transactionId, "SUCCESS");
     }
 
@@ -83,7 +74,8 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (newStatus == PaymentStatus.SUCCESS) {
             // Automatically move Order to PROCESSING (which deducts stock!)
-            orderService.updateOrderStatus(payment.getOrder().getId(), OrderStatus.PROCESSING, "Payment Verified via " + payment.getPaymentMethod());
+            // --- FIX: Use the dedicated confirmation method to bypass Admin checks ---
+            orderService.confirmOrderPayment(payment.getOrder().getId(), payment.getPaymentMethod());
             log.info("Payment Success. Order {} moved to PROCESSING.", payment.getOrder().getOrderNumber());
         } else if (newStatus == PaymentStatus.FAILED) {
             log.warn("Payment Failed for Order {}", payment.getOrder().getOrderNumber());

@@ -8,10 +8,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Getter // Replaced @Data
-@Setter // Replaced @Data
-@ToString(exclude = {"product", "store"}) // Added to break loop
-@EqualsAndHashCode(exclude = {"product", "store"}) // Added to break loop
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -39,6 +37,10 @@ public class StockItem {
 
     @Column(nullable = false)
     private Integer quantity;
+
+    // --- FIX: Optimistic Locking for Concurrency ---
+    @Version
+    private Long version;
 
     @CreationTimestamp
     @Column(updatable = false)

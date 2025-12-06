@@ -244,6 +244,9 @@ public class DataSeeder implements CommandLineRunner {
         Store nyStore = storeRepository.save(Store.builder()
                 .name("NYC Flagship Store")
                 .address("5th Avenue, New York, NY")
+                // Added Lat/Long to fix null values in responses
+                .latitude(new BigDecimal("40.7128"))
+                .longitude(new BigDecimal("-74.0060"))
                 .contactPhone("212-555-0199")
                 .operatingHours("10 AM - 9 PM")
                 .build());
@@ -251,6 +254,9 @@ public class DataSeeder implements CommandLineRunner {
         Store laStore = storeRepository.save(Store.builder()
                 .name("LA Boutique")
                 .address("Rodeo Drive, Beverly Hills, CA")
+                // Added Lat/Long
+                .latitude(new BigDecimal("34.0736"))
+                .longitude(new BigDecimal("-118.4004"))
                 .contactPhone("310-555-0188")
                 .operatingHours("11 AM - 8 PM")
                 .build());
@@ -258,6 +264,9 @@ public class DataSeeder implements CommandLineRunner {
         Store chiStore = storeRepository.save(Store.builder()
                 .name("Chicago Outlet")
                 .address("Michigan Avenue, Chicago, IL")
+                // Added Lat/Long
+                .latitude(new BigDecimal("41.8781"))
+                .longitude(new BigDecimal("-87.6298"))
                 .contactPhone("312-555-0177")
                 .operatingHours("9 AM - 6 PM")
                 .build());
@@ -308,10 +317,6 @@ public class DataSeeder implements CommandLineRunner {
     private void seedInventory(List<Product> products, Map<String, Store> stores) {
         log.info("[Phase 5] Distributing Inventory to Stores...");
 
-        // Indices from the product list above:
-        // 0: Diamond Ring, 1: Silver Chain, 2: Gold Band, 3: Ruby Pendant
-        // 4: Platinum Studs, 5: Emerald Bracelet, 6: Sapphire Ring
-
         Product diamondRing = products.get(0);
         Product silverChain = products.get(1);
         Product goldBand = products.get(2);
@@ -324,27 +329,46 @@ public class DataSeeder implements CommandLineRunner {
         Store la = stores.get("LA");
         Store chi = stores.get("CHI");
 
-        // Central Warehouse Stock (Unassigned Store) - The "Mother Lode"
-        stockItemRepository.save(StockItem.builder().product(diamondRing).store(null).quantity(500).build());
-        stockItemRepository.save(StockItem.builder().product(silverChain).store(null).quantity(1000).build());
-        stockItemRepository.save(StockItem.builder().product(goldBand).store(null).quantity(800).build());
-        stockItemRepository.save(StockItem.builder().product(platinumStuds).store(null).quantity(200).build());
+        // --- SPECIFIC STORE STOCK (Keep for testing "Pickup" scenarios) ---
 
         // NYC Stock (Flagship - High Inventory, Luxury Items)
         stockItemRepository.save(StockItem.builder().product(diamondRing).store(nyc).quantity(50).build());
         stockItemRepository.save(StockItem.builder().product(goldBand).store(nyc).quantity(30).build());
-        stockItemRepository.save(StockItem.builder().product(platinumStuds).store(nyc).quantity(15).build()); // Only NYC has studs initially
-        stockItemRepository.save(StockItem.builder().product(emeraldBracelet).store(nyc).quantity(5).build()); // Rare item
+        stockItemRepository.save(StockItem.builder().product(platinumStuds).store(nyc).quantity(15).build());
+        stockItemRepository.save(StockItem.builder().product(emeraldBracelet).store(nyc).quantity(5).build());
 
         // LA Stock (Boutique - Trendy Items)
         stockItemRepository.save(StockItem.builder().product(diamondRing).store(la).quantity(20).build());
-        stockItemRepository.save(StockItem.builder().product(rubyPendant).store(la).quantity(40).build()); // LA loves Rose Gold
+        stockItemRepository.save(StockItem.builder().product(rubyPendant).store(la).quantity(40).build());
         stockItemRepository.save(StockItem.builder().product(silverChain).store(la).quantity(100).build());
 
         // Chicago Stock (Outlet - High Volume, Affordable)
         stockItemRepository.save(StockItem.builder().product(silverChain).store(chi).quantity(200).build());
         stockItemRepository.save(StockItem.builder().product(sapphireRing).store(chi).quantity(50).build());
         stockItemRepository.save(StockItem.builder().product(goldBand).store(chi).quantity(10).build());
+
+        // --- FIX: UNIVERSAL BACKFILL FOR CENTRAL WAREHOUSE ---
+        // This ensures EVERY product has stock in the Central Warehouse (store=null).
+        // This effectively replaces the need for the manual SQL patch.
+        log.info(">> Backfilling Central Warehouse Inventory for ALL Products...");
+
+        for (Product product : products) {
+            // Check if this product is already in the Central Warehouse (store == null)
+            boolean existsInWarehouse = stockItemRepository.findByProductIdAndStoreIdIsNull(product.getId()).isPresent();
+
+            if (!existsInWarehouse) {
+                stockItemRepository.save(StockItem.builder()
+                        .product(product)
+                        .store(null) // NULL = Central Warehouse
+                        .quantity(500) // Default abundant stock
+                        .build());
+                log.debug("Backfilled Central Warehouse stock for: {}", product.getName());
+            } else {
+                // Optional: Top up stock if it exists? (Ignoring for now to preserve manual values)
+                log.debug("Central Warehouse stock already exists for: {}", product.getName());
+            }
+        }
+        log.info(">> Central Warehouse Backfill Complete.");
     }
 
     private void seedCustomers(Role customerRole) {

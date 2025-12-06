@@ -10,14 +10,14 @@ import org.mapstruct.Mapping;
 import org.mapstruct.Named;
 
 import java.math.BigDecimal;
-import java.util.Set;
 
 @Mapper(componentModel = "spring")
 public interface EngagementMapper {
 
     // --- Cart Maps ---
     @Mapping(target = "totalPrice", expression = "java(cart.getTotalPrice())")
-    @Mapping(target = "totalItems", expression = "java(cart.getItems().size())")
+    // FIX: Sum the quantity of items (e.g., 2 rings + 1 chain = 3 items) instead of counting rows (2 rows)
+    @Mapping(target = "totalItems", expression = "java(cart.getItems().stream().mapToInt(com.jewelleryapp.entity.CartItem::getQuantity).sum())")
     CartResponseDto toCartDto(ShoppingCart cart);
 
     @Mapping(target = "productId", source = "product.id")

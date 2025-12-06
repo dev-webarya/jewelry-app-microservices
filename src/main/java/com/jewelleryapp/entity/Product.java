@@ -3,7 +3,9 @@ package com.jewelleryapp.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.Where;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -11,15 +13,16 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-@Getter // Replaced @Data
-@Setter // Replaced @Data
-@ToString(exclude = {"category", "collections", "attributes", "images"}) // Added to break loop
-@EqualsAndHashCode(exclude = {"category", "collections", "attributes", "images"}) // Added to break loop
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
 @Table(name = "products")
+// --- FIX: Soft Delete Configuration ---
+@SQLDelete(sql = "UPDATE products SET deleted = true WHERE id = ?")
+@Where(clause = "deleted = false")
 public class Product {
 
     @Id
@@ -42,13 +45,16 @@ public class Product {
     @Builder.Default
     private boolean isActive = true;
 
+    // --- FIX: Soft Delete Flag ---
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean deleted = false;
+
     @CreationTimestamp
     private Instant createdAt;
 
     @UpdateTimestamp
     private Instant updatedAt;
-
-    // --- Relationships ---
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")

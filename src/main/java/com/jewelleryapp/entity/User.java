@@ -3,7 +3,9 @@ package com.jewelleryapp.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.Where;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -17,13 +19,14 @@ import java.util.stream.Collectors;
 
 @Getter
 @Setter
-@ToString(exclude = {"roles", "managedStore"}) // Exclude store to prevent loops
-@EqualsAndHashCode(exclude = {"roles", "managedStore"})
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
 @Table(name = "app_users")
+// --- FIX: Soft Delete Configuration ---
+@SQLDelete(sql = "UPDATE app_users SET deleted = true WHERE id = ?")
+@Where(clause = "deleted = false")
 public class User implements UserDetails {
 
     @Id
@@ -49,9 +52,11 @@ public class User implements UserDetails {
     @Builder.Default
     private boolean isEnabled = false;
 
-    // --- New Relationship: Store Assignment ---
-    // A user (Manager) belongs to one Store.
-    // Admins and Customers usually have this as null.
+    // --- FIX: Soft Delete Flag ---
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean deleted = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_store_id")
     private Store managedStore;
@@ -80,32 +85,20 @@ public class User implements UserDetails {
     }
 
     @Override
-    public String getUsername() {
-        return email;
-    }
+    public String getUsername() { return email; }
 
     @Override
-    public String getPassword() {
-        return password;
-    }
+    public String getPassword() { return password; }
 
     @Override
-    public boolean isAccountNonExpired() {
-        return true;
-    }
+    public boolean isAccountNonExpired() { return true; }
 
     @Override
-    public boolean isAccountNonLocked() {
-        return true;
-    }
+    public boolean isAccountNonLocked() { return true; }
 
     @Override
-    public boolean isCredentialsNonExpired() {
-        return true;
-    }
+    public boolean isCredentialsNonExpired() { return true; }
 
     @Override
-    public boolean isEnabled() {
-        return this.isEnabled;
-    }
+    public boolean isEnabled() { return this.isEnabled; }
 }

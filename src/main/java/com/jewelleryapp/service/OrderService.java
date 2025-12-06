@@ -19,6 +19,9 @@ public interface OrderService {
     // NEW: Buy everything in cart
     OrderResponseDto checkoutCart(CartCheckoutRequestDto request);
 
+    // NEW: Confirm payment (System bypass for customers)
+    OrderResponseDto confirmOrderPayment(UUID orderId, String paymentMethod);
+
     Page<OrderResponseDto> getAllOrders(
             OrderStatus status,
             String orderNumber,
