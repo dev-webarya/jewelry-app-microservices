@@ -1,0 +1,35 @@
+# Common configuration shared by all services
+spring:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  h2:
+    console:
+      enabled: false
+
+# JWT Configuration - shared across services
+application:
+  security:
+    jwt:
+      secret-key: ${JWT_SECRET:WFMmYWFiZWNkZjAxMjM0NTY3ODlhYmNlZGYwMTIzNDU2Nzg5YWJjZWYwMTIzNDU2Nzg5YWJjZWYwMTIzNDU2Nzg5YWJjZWY=}
+      expiration: ${JWT_EXPIRATION:86400000}
+      refresh-token:
+        expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.jewellery: DEBUG
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always

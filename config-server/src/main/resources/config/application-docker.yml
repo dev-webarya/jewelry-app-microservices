@@ -1,0 +1,12 @@
+# Docker profile - overrides for containerized environment
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+spring:
+  h2:
+    console:
+      enabled: false

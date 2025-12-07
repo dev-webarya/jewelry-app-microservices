@@ -1,0 +1,65 @@
+# API Gateway Configuration
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: user-service-auth
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/auth/**
+        - id: user-service-users
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/users/**
+        - id: product-service
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/products/**, /api/v1/categories/**, /api/v1/collections/**
+        - id: inventory-service
+          uri: lb://inventory-service
+          predicates:
+            - Path=/api/v1/stock-items/**
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/v1/orders/**
+        - id: cart-service
+          uri: lb://cart-service
+          predicates:
+            - Path=/api/v1/cart/**
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/v1/payments/**
+        - id: shipping-service
+          uri: lb://shipping-service
+          predicates:
+            - Path=/api/v1/shipments/**
+        - id: store-service
+          uri: lb://store-service
+          predicates:
+            - Path=/api/v1/stores/**
+        - id: review-service
+          uri: lb://review-service
+          predicates:
+            - Path=/api/v1/reviews/**
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/v1/notifications/**
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URI:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true

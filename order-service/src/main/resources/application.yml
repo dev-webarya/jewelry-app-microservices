@@ -1,0 +1,36 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: jdbc:h2:mem:orderdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+application:
+  security:
+    jwt:
+      secret-key: WFMmYWFiZWNkZjAxMjM0NTY3ODlhYmNlZGYwMTIzNDU2Nzg5YWJjZWYwMTIzNDU2Nzg5YWJjZWYwMTIzNDU2Nzg5YWJjZWY=
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs

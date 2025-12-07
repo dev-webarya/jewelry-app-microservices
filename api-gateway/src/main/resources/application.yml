@@ -1,0 +1,153 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        # User Service Routes
+        - id: user-service-auth
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/auth/**
+        - id: user-service-users
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/users/**
+
+        # Product Service Routes
+        - id: product-service-products
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/products/**
+        - id: product-service-categories
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/categories/**
+        - id: product-service-collections
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/collections/**
+        - id: product-service-attributes
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/attribute-types/**, /api/v1/attribute-values/**
+        - id: product-service-images
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/product-images/**
+
+        # Inventory Service Routes
+        - id: inventory-service
+          uri: lb://inventory-service
+          predicates:
+            - Path=/api/v1/stock-items/**
+
+        # Order Service Routes
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/v1/orders/**
+
+        # Cart Service Routes
+        - id: cart-service
+          uri: lb://cart-service
+          predicates:
+            - Path=/api/v1/cart/**
+
+        # Payment Service Routes
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/v1/payments/**
+
+        # Shipping Service Routes
+        - id: shipping-service
+          uri: lb://shipping-service
+          predicates:
+            - Path=/api/v1/shipments/**
+
+        # Store Service Routes
+        - id: store-service
+          uri: lb://store-service
+          predicates:
+            - Path=/api/v1/stores/**
+
+        # Review Service Routes
+        - id: review-service
+          uri: lb://review-service
+          predicates:
+            - Path=/api/v1/reviews/**
+
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:3000"
+              - "http://localhost:5173"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+# JWT Configuration
+application:
+  security:
+    jwt:
+      secret-key: WFMmYWFiZWNkZjAxMjM0NTY3ODlhYmNlZGYwMTIzNDU2Nzg5YWJjZWYwMTIzNDU2Nzg5YWJjZWYwMTIzNDU2Nzg5YWJjZWY=
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+
+# Logging
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+
+# SpringDoc for API Gateway
+springdoc:
+  swagger-ui:
+    urls:
+      - name: User Service
+        url: /user-service/v3/api-docs
+      - name: Product Service
+        url: /product-service/v3/api-docs
+      - name: Inventory Service
+        url: /inventory-service/v3/api-docs
+      - name: Order Service
+        url: /order-service/v3/api-docs
+      - name: Cart Service
+        url: /cart-service/v3/api-docs
+      - name: Payment Service
+        url: /payment-service/v3/api-docs
+      - name: Shipping Service
+        url: /shipping-service/v3/api-docs
+      - name: Store Service
+        url: /store-service/v3/api-docs
+      - name: Review Service
+        url: /review-service/v3/api-docs
