@@ -66,20 +66,57 @@ docker-compose up -d
 docker-compose logs -f api-gateway
 ```
 
-### Local Development
+### Local Development (Without Docker)
+
+**Prerequisites:** Java 17+, Maven 3.8+
+
+**Step 1: Build common-lib first**
 ```bash
-# Start in order:
-cd config-server && mvn spring-boot:run
-cd eureka-server && mvn spring-boot:run
-cd api-gateway && mvn spring-boot:run
-cd user-service && mvn spring-boot:run
-# ... other services
+cd common-lib
+mvn clean install
+```
+
+**Step 2: Start infrastructure services (in separate terminals)**
+```bash
+# Terminal 1: Eureka Server
+cd eureka-server
+mvn spring-boot:run
+
+# Terminal 2: API Gateway (wait for Eureka to start)
+cd api-gateway
+mvn spring-boot:run
+```
+
+**Step 3: Start business services (in separate terminals)**
+```bash
+# Terminal 3: User Service
+cd user-service
+mvn spring-boot:run
+
+# Terminal 4: Product Service
+cd product-service
+mvn spring-boot:run
+
+# Start other services as needed...
 ```
 
 ## API Documentation
 
-- **Aggregated Swagger**: http://localhost:8080/swagger-ui.html
+### Swagger UI URLs
+
+| Access Via | URL |
+|------------|-----|
+| **API Gateway (aggregated)** | http://localhost:8080/swagger-ui.html |
+| User Service (direct) | http://localhost:8081/swagger-ui.html |
+| Product Service (direct) | http://localhost:8082/swagger-ui.html |
+| Inventory Service (direct) | http://localhost:8083/swagger-ui.html |
+| Order Service (direct) | http://localhost:8084/swagger-ui.html |
+| Cart Service (direct) | http://localhost:8085/swagger-ui.html |
+| Store Service (direct) | http://localhost:8089/swagger-ui.html |
+| Review Service (direct) | http://localhost:8090/swagger-ui.html |
+
 - **Eureka Dashboard**: http://localhost:8761
+- **H2 Console** (per service): http://localhost:{port}/h2-console
 
 ## Sample Users (Dev Profile)
 

@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Import;
  * Import this in each microservice to get shared functionality
  */
 @Configuration
-@Import({ GlobalExceptionHandler.class })
+@Import({ GlobalExceptionHandler.class, CorsConfig.class })
 public class CommonLibAutoConfiguration {
 
     @Bean
